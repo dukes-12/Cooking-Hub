@@ -1,6 +1,7 @@
 import { getIngredient } from '../data/ingredients';
 import { CHAINS, getChain, getCountry, type Chain } from '../data/reference';
 import type { Profile } from '../types';
+import { chainPrice } from './chainprices';
 import { communityPricePerKg } from './openprices';
 import { median, type PriceObservation } from './receipts';
 import { hash01 } from './text';
@@ -57,8 +58,9 @@ export const observedProvider: PriceProvider = {
 };
 
 /** D'où vient le prix affiché : relevé sur un ticket ou estimé. */
-export function priceSource(ingredientId: string, chainId: string | null, country = 'FR'): 'observed' | 'community' | 'estimate' | null {
+export function priceSource(ingredientId: string, chainId: string | null, country = 'FR'): 'observed' | 'online' | 'community' | 'estimate' | null {
   if (chainId && observed.has(`${chainId}|${ingredientId}`)) return 'observed';
+  if (onlineProvider.pricePerKg(ingredientId, chainId, country) != null) return 'online';
   if (communityPricePerKg(ingredientId, chainId, country)) return 'community';
   return estimatedProvider.pricePerKg(ingredientId, chainId, country) != null ? 'estimate' : null;
 }
@@ -70,7 +72,14 @@ export const communityProvider: PriceProvider = {
   pricePerKg: (ingredientId, chainId, country) => communityPricePerKg(ingredientId, chainId, country)?.value ?? null,
 };
 
-const providers: PriceProvider[] = [observedProvider, communityProvider, estimatedProvider];
+/** Prix en ligne de l'enseigne (relevé hebdomadaire de son site, prix global de l'enseigne). */
+export const onlineProvider: PriceProvider = {
+  id: 'online',
+  label: "Prix en ligne de l'enseigne (relevé chaque semaine)",
+  pricePerKg: (ingredientId, chainId, country) => chainPrice(ingredientId, chainId, country, getIngredient(ingredientId)?.family)?.perKg ?? null,
+};
+
+const providers: PriceProvider[] = [observedProvider, onlineProvider, communityProvider, estimatedProvider];
 
 export function pricePerKg(ingredientId: string, chainId: string | null, country: string): number | null {
   for (const p of providers) {

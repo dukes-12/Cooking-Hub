@@ -1,3 +1,4 @@
+import { useChainPrices } from '../lib/chainprices';
 import { useEffect, useMemo, useState } from 'react';
 import { loadCommunityPrices, useCommunityPrices } from '../lib/openprices';
 import { RecipeVisual, StatusBadge } from '../components/RecipeCard';
@@ -35,7 +36,7 @@ export function RecipeView({ recipe, preview, onSave }: { recipe: Recipe; previe
   const [doneSteps, setDoneSteps] = useState<number[]>([]);
   const [cooked, setCooked] = useState(false);
 
-  const community = useCommunityPrices();
+  const community = useCommunityPrices() + useChainPrices();
   useEffect(() => {
     loadCommunityPrices(recipe.ingredients.map((i) => i.ingredientId).filter((x): x is string => !!x), profile.country);
   }, [recipe, profile.country]);

@@ -14,7 +14,13 @@ async function cached(request, ttlSeconds, compute) {
   return res;
 }
 
+import { runScraper } from './scraper.js';
+
 export default {
+  async scheduled(event, env, ctx) {
+    // Relevé des prix des enseignes portugaises : une petite étape toutes les 10 minutes (voir scraper.js).
+    ctx.waitUntil(runScraper(env).then((msg) => console.log('scraper:', msg)));
+  },
   async fetch(request, env) {
     const url = new URL(request.url);
     const q = url.searchParams;
@@ -32,6 +38,15 @@ export default {
     }
     if (url.pathname === '/api/prices' && request.method === 'GET') {
       return cached(request, 12 * 3600, () => openPrices({ cat: q.get('cat'), code: q.get('code'), country: q.get('country'), currency: q.get('currency') }, ua));
+    }
+    if (url.pathname === '/api/chain-prices' && request.method === 'GET') {
+      // Prix en ligne des enseignes (relevé hebdomadaire) ; seul le Portugal est couvert pour l'instant.
+      const data = q.get('country') === 'PT' && env.PRICES ? await env.PRICES.get('chain-prices:PT', 'json') : null;
+      return Response.json(data ?? { chains: {} }, { headers: { 'Cache-Control': 'public, max-age=3600' } });
+    }
+    if (url.pathname === '/api/chain-prices/status' && request.method === 'GET') {
+      const st = env.PRICES ? await env.PRICES.get('scrape:state', 'json') : null;
+      return Response.json(st ? { week: st.week, phase: st.phase, sitemaps: st.sitemaps?.length ?? null, pages: st.queue?.length ?? null, log: st.log?.slice(-10) } : { phase: 'idle' });
     }
     if (url.pathname === '/api/off/product' && request.method === 'GET') {
       return cached(request, 7 * 86400, () => offProduct(q.get('code'), ua));

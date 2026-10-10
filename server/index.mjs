@@ -66,6 +66,7 @@ const server = createServer(async (req, res) => {
   if (url.pathname === '/api/prices') return cachedJson(res, url.pathname + url.search, 12 * 3600e3, () => openPrices({ cat: q.get('cat'), code: q.get('code'), country: q.get('country'), currency: q.get('currency') }, ua));
   if (url.pathname === '/api/off/product') return cachedJson(res, url.pathname + url.search, 7 * 86400e3, () => offProduct(q.get('code'), ua));
   if (url.pathname === '/api/off/category') return cachedJson(res, url.pathname + url.search, 7 * 86400e3, () => offCategory({ cat: q.get('cat'), country: q.get('country') }, ua));
+  if (url.pathname === '/api/chain-prices') return json(res, 200, { chains: {} }); // relevé fait par le Worker Cloudflare (KV)
   if (url.pathname === '/api/config') return json(res, 200, publicConfig(process.env));
   if (url.pathname === '/api/geocode') {
     const { status, body } = await geocodeGoogle({ q: url.searchParams.get('q'), country: url.searchParams.get('country') }, process.env.GOOGLE_MAPS_API_KEY);

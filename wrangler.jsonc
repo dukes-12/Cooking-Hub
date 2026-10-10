@@ -10,5 +10,8 @@
     // Seules les routes d'API réveillent le Worker ; le reste est servi en statique.
     "run_worker_first": ["/api/*"]
   },
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  "kv_namespaces": [{ "binding": "PRICES", "id": "ed21be4525594e09b081f6bb1b5b7774" }],
+  // Relevé des prix des enseignes portugaises (worker/scraper.js) : une petite étape toutes les 10 minutes.
+  "triggers": { "crons": ["*/10 * * * *"] }
 }

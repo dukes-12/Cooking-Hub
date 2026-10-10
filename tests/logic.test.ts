@@ -401,3 +401,81 @@ describe('comparatif des magasins', () => {
     setObservedPrices([]);
   });
 });
+
+describe('relevé des prix des enseignes portugaises', () => {
+  it('reconnaît les pages produit des ingrédients et écarte les produits préparés', async () => {
+    const { matchUrl, rankCandidates, sizeFromSlug, slugOf } = await import('../worker/scraper.js');
+    expect(matchUrl('https://www.auchan.pt/pt/alimentacao/mercearia/arroz-e-massa/arroz/arroz-agulha-cigala-1kg/40299.html')).toEqual(['riz']);
+    expect(matchUrl('https://www.auchan.pt/pt/alimentacao/mercearia/refeicoes/arroz-agulha-cigala-pronto-a-comer-2x125g/3711293.html')).toEqual([]);
+    expect(matchUrl('https://www.continente.pt/produto/peito-de-frango-continente-7069674.html')).toEqual(['poulet']);
+    expect(matchUrl('https://www.continente.pt/produto/cenoura-continente-2885107.html')).toEqual(['carotte']);
+    expect(matchUrl('https://www.pingodoce.pt/home/produtos/mercearia/temperos-e-molhos/sal/sal-fino-pingo-doce-1805.html')).toEqual(['sel']);
+    expect(matchUrl('https://www.auchan.pt/pt/beleza/corpo/leite-corporal-meio-gordo/1.html')).toEqual([]);
+    expect(matchUrl('https://www.continente.pt/produto/sumo-de-laranja-continente-1.html')).toEqual([]);
+    expect(rankCandidates(['https://x/arroz-agulha-cigala-1kg/1.html', 'https://x/arroz-agulha-auchan-1kg/2.html'], 'auchan')[0]).toContain('auchan');
+    expect(sizeFromSlug(slugOf('https://x/leite-uht-auchan-meio-gordo-6x1l/3010402.html'))).toBe(6000);
+    expect(sizeFromSlug(slugOf('https://x/fortificante-ovomaltine-400g/10.html'))).toBe(400);
+    expect(sizeFromSlug(slugOf('https://x/ovos-classe-m-12-un/1.html'))).toEqual({ pieces: 12 });
+  });
+
+  it('lit le prix au kilo sur les pages produit des trois enseignes', async () => {
+    const { parseProductPage, toPerKg } = await import('../worker/scraper.js');
+    const continente = '<div class="ct-pdp--prices d-flex"><div class="prices mb-sm-1"><div class="price js-product-price"><div class="prices-wrapper"><span class="pwc-tile--price-primary"> 1<span class="decimalPrice">,19&euro;/kg</span> </span></div><div class="pwc-tile--price-secondary "> 0,24&euro;/un </div></div></div></div>';
+    expect(parseProductPage(continente, 'https://www.continente.pt/produto/banana-continente-2597619.html')).toEqual({ perKg: 1.19 });
+    const auchan = '<div class="auc-pdp__units"> <div class="auc-measures"> <span class="auc-measures--price-per-unit">19.47 &euro;/Kg</span> </div> </div>';
+    expect(parseProductPage(auchan, 'https://www.auchan.pt/x/fortificante-ovomaltine-400g/10.html')).toEqual({ perKg: 19.47 });
+    const pingo = '<div class="col"> <h1 class="product-unit-measure">0.25 Kg | 1,16 €/Kg</h1> </div>';
+    expect(parseProductPage(pingo, 'https://www.pingodoce.pt/home/produtos/sal-fino-pingo-doce-1805.html')).toEqual({ perKg: 1.16 });
+    const ldOnly = '<script type="application/ld+json">{"@type":"Product","offers":{"@type":"Offer","priceCurrency":"EUR","price":"5.10"}}</script>';
+    expect(parseProductPage(ldOnly, 'https://www.auchan.pt/x/leite-uht-auchan-meio-gordo-6x1l/3010402.html')).toEqual({ perKg: 0.85 });
+    expect(toPerKg('lait', { perKg: 0.85 })).toBe(0.85);
+    expect(toPerKg('oeuf', { perPiece: 0.22 })).toBe(4);
+    // Prix aberrant pour l'ingrédient (lot, accessoire…) : écarté.
+    expect(toPerKg('riz', { perKg: 58 })).toBeNull();
+  });
+
+  it('enchaîne découverte, relevé et synthèse sur plusieurs passages', async () => {
+    const { runScraper } = await import('../worker/scraper.js');
+    const store = new Map<string, string>();
+    const kv = { get: async (k: string, t?: string) => (store.has(k) ? (t === 'json' ? JSON.parse(store.get(k)!) : store.get(k)) : null), put: async (k: string, v: string) => void store.set(k, v) };
+    const pages: Record<string, string> = {
+      'https://www.continente.pt/sitemap_index.xml': '<sitemapindex><sitemap><loc>https://www.continente.pt/sitemap_1-product.xml</loc></sitemap><sitemap><loc>https://www.continente.pt/sitemap_2-image.xml</loc></sitemap></sitemapindex>',
+      'https://www.continente.pt/sitemap_1-product.xml': '<urlset><url><loc>https://www.continente.pt/produto/arroz-agulha-continente-1.html</loc></url><url><loc>https://www.continente.pt/produto/arroz-agulha-cigala-2.html</loc></url><url><loc>https://www.continente.pt/produto/sumo-3.html</loc></url></urlset>',
+      'https://www.continente.pt/produto/arroz-agulha-continente-1.html': '<div class="ct-pdp--prices"><span>1,15&euro;/kg</span></div>',
+      'https://www.continente.pt/produto/arroz-agulha-cigala-2.html': '<div class="ct-pdp--prices"><span>1,64&euro;/kg</span></div>',
+    };
+    const fetchMock = async (url: string) => (pages[url] ? new Response(pages[url]) : new Response('', { status: 404 }));
+    const orig = globalThis.fetch;
+    globalThis.fetch = fetchMock as typeof fetch;
+    try {
+      const env = { PRICES: kv };
+      const now = new Date('2026-10-12T08:00:00Z');
+      const log: string[] = [];
+      for (let i = 0; i < 12; i++) log.push(await runScraper(env, now));
+      expect(log[0]).toContain('discover');
+      expect(log).toContain('découverte terminée');
+      expect(log).toContain('prix enregistrés');
+      const result = JSON.parse(store.get('chain-prices:PT')!);
+      expect(result.chains['pt-continente'].riz).toMatchObject({ perKg: 1.4, n: 2, min: 1.15 });
+      expect(await runScraper(env, now)).toBe('rien à faire cette semaine');
+      // Semaine suivante : pas de nouvelle découverte (moins de 4 semaines), on relève directement les prix.
+      expect(await runScraper(env, new Date('2026-10-19T08:00:00Z'))).toContain('prices');
+    } finally {
+      globalThis.fetch = orig;
+    }
+  });
+});
+
+describe('prix en ligne des enseignes', () => {
+  it('le prix en ligne de l’enseigne passe après tes tickets et avant Open Prices et l’estimation', async () => {
+    const { setChainPrices } = await import('../src/lib/chainprices');
+    setChainPrices('PT', { chains: { 'pt-continente': { riz: { perKg: 1.2, n: 3, min: 1.1 } } } });
+    expect(pricePerKg('riz', 'pt-continente', 'PT')).toBe(1.2);
+    expect(priceSource('riz', 'pt-continente', 'PT')).toBe('online');
+    expect(priceSource('riz', 'pt-pingodoce', 'PT')).toBe('estimate');
+    setObservedPrices([{ productId: 'riz', storeKey: 's', chainId: 'pt-continente', country: 'PT', date: new Date().toISOString().slice(0, 10), pricePerKg: 0.99, unitPrice: 0.99, label: '', receiptId: 'r' }]);
+    expect(pricePerKg('riz', 'pt-continente', 'PT')).toBe(0.99);
+    setObservedPrices([]);
+    setChainPrices('PT', { chains: {} });
+  });
+});

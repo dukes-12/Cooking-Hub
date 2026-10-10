@@ -41,7 +41,7 @@ export interface StorePrice {
   chain: Chain;
   country: string;
   perKg: number | null;
-  source: 'observed-store' | 'observed' | 'community' | 'estimate' | null;
+  source: 'observed-store' | 'observed' | 'online' | 'community' | 'estimate' | null;
   lastDate?: string;
   count?: number;
 }

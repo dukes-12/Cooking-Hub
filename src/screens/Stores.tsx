@@ -1,3 +1,4 @@
+import { useChainPrices } from '../lib/chainprices';
 import { useCommunityPrices } from '../lib/openprices';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StoreMap, type MapPoint } from '../components/StoreMap';
@@ -22,6 +23,7 @@ export function basketTotal(chainId: string, country: string): number {
 }
 
 export function Stores() {
+  useChainPrices();
   useCommunityPrices(); // le panier type se met à jour quand les prix Open Prices arrivent
   const { state } = useApp();
   const [tab, setTab] = useState<Tab>(state.profile.stores.length ? 'mine' : 'map');
@@ -227,7 +229,7 @@ function MapTab() {
   );
 }
 
-const ORIGIN_LABEL: Record<PriceOrigin, string> = { store: 'ticket', chain: 'ticket enseigne', community: 'Open Prices', estimate: 'estimation' };
+const ORIGIN_LABEL: Record<PriceOrigin, string> = { store: 'ticket', chain: 'ticket enseigne', online: 'prix en ligne', community: 'Open Prices', estimate: 'estimation' };
 
 function Compare() {
   const { state, observations } = useApp();
@@ -259,7 +261,7 @@ function Compare() {
               {mode === 'mine'
                 ? `Les ${result.items} produits que tu achètes, aux quantités habituelles de tes tickets.`
                 : `Panier type de ${REFERENCE_BASKET.length} produits courants.`}{' '}
-              Prix de chaque magasin : tes tickets d'abord, puis Open Prices, sinon estimation.
+              Prix de chaque magasin : tes tickets d'abord, puis le prix en ligne de l'enseigne (relevé chaque semaine), Open Prices, sinon estimation.
               {result.skipped > 0 && ` ${result.skipped} produit${result.skipped > 1 ? 's' : ''} sans prix dans tous les magasins ${result.skipped > 1 ? 'sont' : 'est'} laissé${result.skipped > 1 ? 's' : ''} de côté.`}
             </p>
             <div className="price-table">

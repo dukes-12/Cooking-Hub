@@ -1,3 +1,4 @@
+import { useChainPrices } from '../lib/chainprices';
 import { useMemo } from 'react';
 import { adaptRecipe, scoreRecipe, type Adapted, type Match } from '../lib/adapt';
 import { useCommunityPrices } from '../lib/openprices';
@@ -9,7 +10,7 @@ import type { Recipe } from '../types';
 /** Calcule adaptation + score pour toutes les recettes (mémoïsé). */
 export function useMatches(): Match[] {
   const { state, recipes } = useApp();
-  const community = useCommunityPrices();
+  const community = useCommunityPrices() + useChainPrices();
   return useMemo(
     () => Object.values(recipes).map((r) => scoreRecipe(adaptRecipe(r, state.profile, state.fridge), state.profile)),
     [recipes, state.profile, state.fridge, state.receipts, community],

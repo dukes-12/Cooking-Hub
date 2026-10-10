@@ -14,6 +14,7 @@ import { Stores } from './screens/Stores';
 import { go, useRoute } from './router';
 import { useEffect } from 'react';
 import { useLexiconReady } from './lib/lexicon';
+import { loadChainPrices, useChainPrices } from './lib/chainprices';
 import { loadCommunityPrices } from './lib/openprices';
 import { REFERENCE_BASKET } from './lib/stores';
 import { useApp } from './state';
@@ -28,6 +29,7 @@ const TABS = [
 
 export function App() {
   const { state, recipes } = useApp();
+  useChainPrices(); // re-rendu quand les prix en ligne arrivent
   const lexReady = useLexiconReady(); // réaffiche les écrans quand le dictionnaire multilingue est chargé
 
   // Prix de la communauté (Open Prices) pour le panier type, le menu et la liste de courses, en arrière-plan.
@@ -39,6 +41,8 @@ export function App() {
       ...state.shopping.map((i) => i.ingredientId),
     ].filter((x): x is string => !!x);
     loadCommunityPrices(ids, state.profile.country);
+    // Prix en ligne des enseignes (relevé hebdomadaire) pour les pays couverts.
+    for (const c of new Set([state.profile.country, ...state.profile.stores.map((s) => s.chainId.slice(0, 2).toUpperCase())])) if (c === 'PT') loadChainPrices(c);
   }, [state.onboarded, lexReady, state.profile.country, state.menu, state.shopping, recipes]);
   const [page, param] = useRoute();
 

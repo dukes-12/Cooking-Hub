@@ -5,14 +5,14 @@ import { pricePerKg, priceSource } from './pricing';
 import { lineQuantity, median, type PriceObservation } from './receipts';
 import { REFERENCE_BASKET, storeKey } from './stores';
 
-export type PriceOrigin = 'store' | 'chain' | 'community' | 'estimate';
+export type PriceOrigin = 'store' | 'chain' | 'online' | 'community' | 'estimate';
 
 export interface StoreQuote {
   perKg: number;
   origin: PriceOrigin;
 }
 
-/** Prix au kilo d'un produit dans UN magasin : relevé sur tes tickets de ce magasin, puis de l'enseigne, Open Prices, estimation. */
+/** Prix au kilo d'un produit dans UN magasin : tes tickets de ce magasin, puis de l'enseigne, prix en ligne de l'enseigne, Open Prices, estimation. */
 export function storePrice(productId: string, store: ChosenStore, observations: PriceObservation[]): StoreQuote | null {
   const key = storeKey(store);
   const here = observations.filter((o) => o.productId === productId && o.storeKey === key && o.pricePerKg != null);
@@ -21,7 +21,7 @@ export function storePrice(productId: string, store: ChosenStore, observations: 
   const v = pricePerKg(productId, store.chainId, country);
   if (v == null) return null;
   const src = priceSource(productId, store.chainId, country);
-  return { perKg: v, origin: src === 'observed' ? 'chain' : src === 'community' ? 'community' : 'estimate' };
+  return { perKg: v, origin: src === 'observed' ? 'chain' : src === 'online' ? 'online' : src === 'community' ? 'community' : 'estimate' };
 }
 
 export interface BasketItem {

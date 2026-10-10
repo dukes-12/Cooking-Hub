@@ -5,6 +5,7 @@ import { getChain, getCountry } from '../data/reference';
 import { productImage, type ProductImage } from '../lib/images';
 import { entryForProduct, lexName, useLexiconReady } from '../lib/lexicon';
 import { fetchCategoryProducts, medianNutrition, offProductUrl, type OffProduct } from '../lib/off';
+import { useChainPrices } from '../lib/chainprices';
 import { categoryFor, communityStats, loadCommunityPrices, useCommunityPrices } from '../lib/openprices';
 import { fmtMoney } from '../lib/pricing';
 import { dietNotes, highlights, priceUnitLabel, pricesEverywhere, pricesInMyStores, recipesUsing } from '../lib/products';
@@ -22,7 +23,7 @@ export function Product({ id }: { id: string }) {
   const [sort, setSort] = useState<'country' | 'price'>('country');
   const [flash, setFlash] = useState<string | null>(null);
   const [offProducts, setOffProducts] = useState<OffProduct[]>([]);
-  const cv = useCommunityPrices();
+  const cv = useCommunityPrices() + useChainPrices();
   const country = state.profile.country;
   const cat = categoryFor(id);
 
@@ -107,7 +108,7 @@ export function Product({ id }: { id: string }) {
         <b>En bref</b>
         <ul className="brief">
           {best?.perKg != null && (
-            <li>Le moins cher près de chez toi : <b>{fmtMoney(best.perKg, best.country)}{unit}</b> chez {best.store ? storeTitle(best.store) : best.chain.name}{best.source?.startsWith('observed') ? ' (prix relevé)' : best.source === 'community' ? ' (Open Prices)' : ' (estimation)'}</li>
+            <li>Le moins cher près de chez toi : <b>{fmtMoney(best.perKg, best.country)}{unit}</b> chez {best.store ? storeTitle(best.store) : best.chain.name}{best.source?.startsWith('observed') ? ' (prix relevé)' : best.source === 'online' ? ' (prix en ligne)' : best.source === 'community' ? ' (Open Prices)' : ' (estimation)'}</li>
           )}
           {hl.map((h) => <li key={h}>{h}</li>)}
           {used.length > 0 && <li>Utilisé dans {used.length} recette{used.length > 1 ? 's' : ''} de l'app</li>}
@@ -152,7 +153,7 @@ export function Product({ id }: { id: string }) {
                 <span className="grow">
                   {p.store ? storeTitle(p.store) : p.chain.name}
                   <span className="small muted block">
-                    {p.source === 'observed-store' ? `relevé ici · ${p.count} fois, dernier le ${new Date(p.lastDate!).toLocaleDateString('fr-FR')}` : p.source === 'observed' ? `relevé chez ${p.chain.name}` : p.source === 'community' ? 'Open Prices (communauté)' : p.source === 'estimate' ? 'estimation' : 'pas de prix'}
+                    {p.source === 'observed-store' ? `relevé ici · ${p.count} fois, dernier le ${new Date(p.lastDate!).toLocaleDateString('fr-FR')}` : p.source === 'observed' ? `relevé chez ${p.chain.name}` : p.source === 'online' ? 'prix en ligne de l’enseigne (relevé hebdo)' : p.source === 'community' ? 'Open Prices (communauté)' : p.source === 'estimate' ? 'estimation' : 'pas de prix'}
                   </span>
                 </span>
                 <b>{p.perKg != null ? `${fmtMoney(p.perKg, p.country)}${unit}` : '—'}</b>
@@ -182,7 +183,7 @@ export function Product({ id }: { id: string }) {
               {g.prices.map((p) => (
                 <div key={p.chain.id} className="price-row">
                   <span className="store-dot" style={{ background: p.chain.color }} />
-                  <span className="grow">{p.chain.name}{p.source === 'observed' && <span className="badge badge-good">relevé</span>}{p.source === 'community' && <span className="badge badge-good">Open Prices</span>}</span>
+                  <span className="grow">{p.chain.name}{p.source === 'observed' && <span className="badge badge-good">relevé</span>}{p.source === 'online' && <span className="badge badge-good">en ligne</span>}{p.source === 'community' && <span className="badge badge-good">Open Prices</span>}</span>
                   <b>{fmtMoney(p.perKg, p.country)}{unit}</b>
                 </div>
               ))}
@@ -199,7 +200,7 @@ export function Product({ id }: { id: string }) {
             ))}
           </div>
         )}
-        <p className="small muted">Prix dans la devise de chaque pays ; estimations sauf mention « relevé » (tes tickets) ou « Open Prices » (communauté).</p>
+        <p className="small muted">Prix dans la devise de chaque pays ; estimations sauf mention « relevé » (tes tickets), « en ligne » (site de l’enseigne, relevé chaque semaine) ou « Open Prices » (communauté).</p>
       </Section>
 
       <Section title="Prix de la communauté">

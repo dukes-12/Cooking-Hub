@@ -106,7 +106,7 @@ public/        manifest PWA + service worker (hors-ligne)
 
 ## Prix réels et données produits : Open Prices et Open Food Facts
 
-Ordre des sources de prix (`src/lib/pricing.ts`) : **tes tickets** (médiane 90 jours par enseigne) → **Open Prices** (médiane de l'enseigne si ≥ 2 relevés, sinon médiane du pays si ≥ 3 relevés × indice de l'enseigne ; valeurs aberrantes écartées) → **estimation**.
+Ordre des sources de prix (`src/lib/pricing.ts`) : **tes tickets** (médiane 90 jours par enseigne) → **prix en ligne de l'enseigne** (Portugal, relevé chaque semaine, voir ci-dessous) → **Open Prices** (médiane de l'enseigne si ≥ 2 relevés, sinon médiane du pays si ≥ 3 relevés × indice de l'enseigne ; valeurs aberrantes écartées) → **estimation**.
 
 - **Catégories** : chaque aliment du dictionnaire porte sa catégorie Open Food Facts (champ `k` de `public/lexicon.json`, ex. `en:chicken-breasts`), calculée par `npm run lexicon:categories` à partir de la taxonomie des catégories ; corrections manuelles dans `CATEGORY_OVERRIDES` (`src/lib/openprices.ts`).
 - **Serveur** (`server/core.mjs`, routes du Worker, réponses mises en cache 12 h à 7 jours) :
@@ -116,6 +116,17 @@ Ordre des sources de prix (`src/lib/pricing.ts`) : **tes tickets** (médiane 90 
   - User-Agent `CookingHub/1.0 (contact)` demandé par Open Food Facts : secret `OFF_CONTACT` du Worker.
 - **Dans l'appli** : prix « Open Prices » dans les fiches produit, recettes et comparatifs ; section « Prix de la communauté » (par enseigne) et « Dans les rayons » ; photo et valeurs moyennes pour 100 g quand le produit n'en a pas ; bouton **Code-barres** dans le frigo (scan caméra sur Chrome Android, saisie des chiffres ailleurs, dont Safari iPhone).
 - **Licences** : données Open Food Facts et Open Prices sous **ODbL** (citées dans l'appli), photos sous **CC BY-SA**.
+### Relevé hebdomadaire des prix au Portugal (Continente, Pingo Doce, Auchan)
+
+`worker/scraper.js`, lancé par le cron du Worker (`wrangler.jsonc`, toutes les 10 minutes, une petite étape à chaque fois), résultat dans Cloudflare KV (`PRICES`) et servi par `GET /api/chain-prices?country=PT` (état : `/api/chain-prices/status`).
+
+- **Respect des robots.txt** : les pages de recherche des trois sites sont interdites aux robots ; on n'utilise que les **plans du site (sitemaps)** et les **pages produit**, qui sont autorisés. User-Agent identifié (`CookingHubBot/1.0` + adresse de l'appli), 12 pages toutes les 10 minutes réparties sur les trois sites.
+- **Découverte** (toutes les 4 semaines) : lecture des sitemaps produits, et pour chaque ingrédient, choix de 4 produits dont l'adresse correspond (`worker/scraper-catalog.js` : mots portugais attendus et exclus ; marque de l'enseigne et produits les plus simples d'abord).
+- **Relevé** (chaque semaine) : prix au kilo / litre affiché sur la page produit, sinon prix ÷ format ; valeurs aberrantes écartées (hors de ×5 / ÷5 du prix de référence).
+- **Résultat** : médiane par enseigne et par ingrédient = prix global de l'enseigne ; un produit non relevé une semaine garde son prix précédent.
+- Intermarché, Minipreço et El Corte Inglés bloquent les requêtes venant de Cloudflare ; Lidl et Aldi n'ont pas de boutique en ligne avec prix.
+- ⚠️ Les conditions d'utilisation des sites peuvent interdire l'extraction automatique, même quand le robots.txt l'autorise : usage personnel, faible fréquence ; à revoir avant toute diffusion publique de l'appli.
+
 - Pistes : renvoyer les tickets validés vers Open Prices (compte Open Food Facts, avec l'accord de l'utilisateur) ; collecte automatique sur les sites des enseignes (voir CGU).
 
 ## Limites du prototype & prochaines étapes
