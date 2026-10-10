@@ -451,7 +451,7 @@ describe('relevé des prix des enseignes portugaises', () => {
       const env = { PRICES: kv };
       const now = new Date('2026-10-12T08:00:00Z');
       const log: string[] = [];
-      for (let i = 0; i < 12; i++) log.push(await runScraper(env, now));
+      for (let i = 0; i < 25 && !log.includes('prix enregistrés'); i++) log.push(await runScraper(env, now));
       expect(log[0]).toContain('discover');
       expect(log).toContain('découverte terminée');
       expect(log).toContain('prix enregistrés');

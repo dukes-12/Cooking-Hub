@@ -238,19 +238,28 @@ export async function runScraper(env, now = new Date()) {
   }
 
   if (state.phase === 'discover') {
-    // Liste des sitemaps produits de chaque enseigne (au premier passage).
+    // Premier passage : un index de sitemaps par enseigne, lu lors des passages suivants.
     if (!state.sitemaps) {
-      state.sitemaps = [];
-      for (const c of CHAINS) {
-        try {
-          for (const u of locs(await fetchText(c.index)).filter((u) => /product/i.test(u))) state.sitemaps.push({ chain: c.id, url: u });
-        } catch (e) {
-          state.log.push(`${c.id} index: ${e.message}`);
-        }
-      }
+      state.sitemaps = CHAINS.map((c) => ({ chain: c.id, url: c.index, isIndex: true, tries: 0 }));
       state.candidates = {};
       await kv.put('scrape:state', JSON.stringify(state));
-      return `découverte : ${state.sitemaps.length} sitemaps`;
+      return `découverte : ${CHAINS.length} enseignes`;
+    }
+    if (state.sitemaps[0]?.isIndex) {
+      const job = state.sitemaps.shift();
+      let msg;
+      try {
+        const subs = locs(await fetchText(job.url)).filter((u) => /product/i.test(u));
+        state.sitemaps.unshift(...subs.map((url) => ({ chain: job.chain, url })));
+        msg = `${job.chain} : ${subs.length} sitemaps produits`;
+      } catch (e) {
+        // Erreur passagère (502…) : on réessaie plus tard dans le cycle, deux fois au plus.
+        if (job.tries < 2) state.sitemaps.push({ ...job, tries: job.tries + 1 });
+        msg = `${job.chain} index : ${e.message}`;
+      }
+      state.log = [...state.log, msg].slice(-30);
+      await kv.put('scrape:state', JSON.stringify(state));
+      return msg;
     }
     // Passage précédent encore en cours (gros fichier lent à télécharger) : on attend.
     // Au-delà de 5 minutes, on le considère comme arrêté (limite de calcul) : on le note et on continue.
@@ -286,7 +295,10 @@ export async function runScraper(env, now = new Date()) {
       await kv.put('scrape:state', JSON.stringify(state));
       return msg;
     }
-    await kv.put('scrape:tracked', JSON.stringify({ at: now.getTime(), chains: state.candidates }));
+    // Une enseigne sans résultat ce cycle (site indisponible) garde ses produits suivis précédents.
+    const chains = { ...tracked.chains };
+    for (const [chain, byId] of Object.entries(state.candidates)) if (Object.keys(byId).length) chains[chain] = byId;
+    await kv.put('scrape:tracked', JSON.stringify({ at: now.getTime(), chains }));
     Object.assign(state, { phase: 'prices', candidates: undefined, sitemaps: undefined });
     await kv.put('scrape:state', JSON.stringify(state));
     return 'découverte terminée';
