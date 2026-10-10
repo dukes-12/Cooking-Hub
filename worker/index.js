@@ -1,13 +1,20 @@
 // Point d'entrée Cloudflare Workers : les routes /api/* passent par ici,
 // tout le reste (l'app compilée dans dist/) est servi directement comme fichiers statiques.
-import { findStoresGoogle, importFromUrl, receiptFromPhotos, recipeFromPhotos } from '../server/core.mjs';
+import { findStoresGoogle, geocodeGoogle, importFromUrl, publicConfig, receiptFromPhotos, recipeFromPhotos } from '../server/core.mjs';
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
     if (url.pathname === '/api/health') {
-      return Response.json({ ok: true, photo: !!env.ANTHROPIC_API_KEY, places: !!env.GOOGLE_MAPS_API_KEY });
+      return Response.json({ ok: true, photo: !!env.ANTHROPIC_API_KEY, places: !!env.GOOGLE_MAPS_API_KEY, map: !!env.GOOGLE_MAPS_BROWSER_KEY });
+    }
+    if (url.pathname === '/api/config') {
+      return Response.json(publicConfig(env));
+    }
+    if (url.pathname === '/api/geocode' && request.method === 'GET') {
+      const { status, body } = await geocodeGoogle({ q: url.searchParams.get('q'), country: url.searchParams.get('country') }, env.GOOGLE_MAPS_API_KEY);
+      return Response.json(body, { status });
     }
     if (url.pathname === '/api/import' && request.method === 'GET') {
       const { status, body } = await importFromUrl(url.searchParams.get('url'));

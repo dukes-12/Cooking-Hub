@@ -23,7 +23,7 @@ Le projet se déploie en **Worker avec fichiers statiques** (`wrangler.jsonc`) :
 Configuration unique, dans le tableau de bord Cloudflare : **Workers & Pages → Create → Import a repository** → `dukes-12/cooking-hub`
 - Commande de build : `npm run build` · Commande de déploiement : `npx wrangler deploy` · Commande d'aperçu : `npx wrangler preview`
 - Builds d'aperçu activés : chaque branche / PR obtient sa propre URL de test.
-- Après la création : **Settings → Variables and Secrets** → ajouter le secret `ANTHROPIC_API_KEY` (import par photo).
+- Après la création : **Settings → Variables and Secrets** → ajouter les secrets `ANTHROPIC_API_KEY` (import par photo, tickets), `GOOGLE_MAPS_API_KEY` (magasins, villes) et `GOOGLE_MAPS_BROWSER_KEY` (carte).
 
 Test local de l'environnement Cloudflare : `npm run preview:cf`. Déploiement manuel : `npx wrangler login` puis `npm run deploy`.
 
@@ -31,14 +31,14 @@ Test local de l'environnement Cloudflare : `npm run preview:cf`. Déploiement ma
 
 | Écran | Rôle |
 |---|---|
-| **Onboarding** | Foyer, pays des courses (prix) et cuisines souhaitées (indépendantes du pays : FR, PT, IT…), magasins (géolocalisation via OpenStreetMap ou choix manuel), régime, allergies, interdits, aliments aimés / détestés, équipement, rythme (express → mijoté), budget/portion, objectif calorique. |
+| **Onboarding** | Foyer, pays des courses (prix) et cuisines souhaitées (indépendantes du pays : FR, PT, IT…), magasins (géolocalisation via Google Maps ou choix manuel), régime, allergies, interdits, aliments aimés / détestés, équipement, rythme (express → mijoté), budget/portion, objectif calorique. |
 | **Découvrir** | Pile de cartes à swiper : → favori, ← passer, ↑ ajouter au menu. Classées par score de compatibilité (goûts, temps, budget, frigo, calories). |
 | **Recherche** (🔍 depuis Découvrir) | Texte + filtres (type de plat, cuisine, temps, prix/portion, calories, « avec ce que j'ai »), tri par pertinence / prix / temps / calories. |
 | **Fiche recette** | Format uniformisé : temps, kcal, coût/portion, difficulté, ingrédients mis à l'échelle, état frigo de chaque ingrédient, remplacements (⇄), comparatif de prix par enseigne, macros, étapes cochables, « J'ai cuisiné » (décompte le frigo). |
 | **Recettes** | Menu de la semaine (portions, coût total), favoris, recettes importées. |
 | **Frigo** | Inventaire par rayon + suggestions « à cuisiner avec ce que tu as ». |
 | **Courses** | Liste générée depuis le menu, moins le frigo et le placard, triée par rayon ; meilleure enseigne, économie possible en partageant entre 2 enseignes ; **mode magasin** plein écran (gros boutons, écran maintenu allumé, hors-ligne) ; les articles achetés vont dans le frigo. |
-| **Magasins** | Tes magasins (ex. « Continente Lumiar ») avec le coût d'un panier type et les prix relevés ; **carte** (OpenStreetMap) des supermarchés autour de toi ou d'une ville, ajout en un geste ; **comparatif** des magasins sur le panier type. Fiche magasin : prix moyens relevés, tickets, itinéraire Google Maps. |
+| **Magasins** | Tes magasins (ex. « Continente Lumiar ») avec le coût d'un panier type et les prix relevés ; **carte Google Maps** des supermarchés autour de toi ou d'une ville, ajout en un geste ; **comparatif** des magasins sur le panier type. Fiche magasin : prix moyens relevés, tickets, itinéraire Google Maps. |
 | **Ticket de caisse** | Photo du ticket (jusqu'à 4 photos, lue par Claude) ou saisie à la main → récapitulatif à vérifier : magasin, date, chaque ligne associée à un produit de l'appli, quantité / format / poids / prix (prix au kilo recalculé), écart avec le total imprimé. Tout est modifiable avant validation. Les prix s'ajoutent au magasin et les articles cochés vont au frigo. |
 | **Fiche produit** | Une fiche par famille de produit (« blanc de poulet » regroupe tous les grammages) : photo (Wikimedia Commons, via Wikidata), noms FR/PT/EN, résumé, valeurs pour 100 g, prix dans tes magasins (relevé dans ce magasin > relevé dans l'enseigne > estimation), prix ailleurs triables par pays ou par prix, historique d'achat, recettes qui l'utilisent. Accessible depuis le frigo, les recettes et les magasins. |
 | **Import** | Coller un lien (Marmiton, 750g, Jow, Ricardo, AllRecipes, receitas Continente / Pingo Doce…), **prendre en photo** une recette (livre, fiche manuscrite, capture — jusqu'à 4 pages, lue par Claude) ou coller un texte : la recette est convertie au format Cooking Hub. |
@@ -56,9 +56,11 @@ Prix de référence par ingrédient (France) × indice pays × indice de l'ensei
 Calculée à partir de la base d'ingrédients (valeurs pour 100 g, type Ciqual). Si la source importée donne les calories, elles sont utilisées en priorité. Un indice de fiabilité s'affiche quand des ingrédients ne sont pas reconnus.
 
 ### Géolocalisation
-- **Google Places en secours** : si OpenStreetMap trouve moins de 3 enseignes connues, notre serveur (`/api/stores`) interroge Google Places (secret `GOOGLE_MAPS_API_KEY`, jamais dans le code ni dans l'appli). On ne demande que id, nom, adresse et position, et on ne garde rien en cache. Sans clé, l'appli reste sur OpenStreetMap.
-- Bouton « Trouver les magasins près de moi » : position du téléphone (API Geolocation du navigateur, **HTTPS obligatoire** — OK sur Cloudflare, et sur `localhost`), puis supermarchés à 4 km via OpenStreetMap (API Overpass, gratuite, sans clé), rapprochés des enseignes connues.
-- Si la localisation est refusée : saisie d'une ville ou d'un code postal (géocodage OpenStreetMap Nominatim).
+Tout passe par **Google Maps** :
+- **Magasins autour** (`/api/stores`) et **recherche de ville** (`/api/geocode`) : notre serveur interroge Google Places (New) avec le secret `GOOGLE_MAPS_API_KEY`, jamais visible dans l'appli. On ne demande que nom, adresse et position (20 supermarchés max. dans un rayon de 4 km), rapprochés des enseignes connues ; rien n'est gardé en cache.
+- **Carte** (onglet Magasins) : API Maps JavaScript, chargée dans le navigateur. Elle demande une **seconde clé**, `GOOGLE_MAPS_BROWSER_KEY`, forcément visible par l'appli : dans Google Cloud, restreins-la aux « Sites web » de l'appli (`https://cooking-hub.*.workers.dev/*`) et à la seule « Maps JavaScript API ». Option : `GOOGLE_MAPS_MAP_ID` (style de carte ; sinon `DEMO_MAP_ID`). Sans cette clé, l'appli propose d'ouvrir Google Maps.
+- **Itinéraire** : lien vers Google Maps (appli ou site), sans clé.
+- Position du téléphone : API Geolocation du navigateur, **HTTPS obligatoire** (OK sur Cloudflare et sur `localhost`).
 - En http sur l'IP locale (`http://192.168…:5173`), les navigateurs bloquent la géolocalisation : utilise l'URL Cloudflare.
 
 ### Dictionnaire multilingue des aliments (français, portugais, anglais)
@@ -94,7 +96,7 @@ server/         core.mjs (logique partagée) + index.mjs (serveur local)
 scripts/        import en masse de recettes → public/catalog.json
 src/
   data/        ingrédients (nutrition, prix, rayons, substituts), recettes de démo, pays/enseignes/régimes
-  lib/         adapt (adaptation + score), pricing, shopping, importer (schema.org → Recipe), geo (OpenStreetMap), units
+  lib/         adapt (adaptation + score), pricing, shopping, importer (schema.org → Recipe), geo (Google Maps via le serveur), units
   screens/     un fichier par écran
   components/  UI partagée (chips, stepper, sheet, picker d'ingrédients, cartes)
   state.tsx    état global persisté en localStorage

@@ -9,7 +9,7 @@ import { buildShoppingList } from '../src/lib/shopping';
 import { DEFAULT_PROFILE } from '../src/state';
 import type { ChosenStore, Profile, Receipt, ReceiptLine } from '../src/types';
 // @ts-expect-error module JS du serveur
-import { extractRecipe, receiptFromPhotos } from '../server/core.mjs';
+import { extractRecipe, geocodeGoogle, publicConfig, receiptFromPhotos } from '../server/core.mjs';
 
 const recipe = (id: string) => SEED_RECIPES.find((r) => r.id === id)!;
 const profile = (p: Partial<Profile> = {}): Profile => ({ ...DEFAULT_PROFILE, ...p });
@@ -244,5 +244,24 @@ describe('tickets de caisse', () => {
   it('refuse la lecture de ticket sans clé API', async () => {
     const res = await receiptFromPhotos([{ mediaType: 'image/jpeg', data: 'x' }], undefined);
     expect(res.status).toBe(501);
+  });
+});
+
+describe('Google Maps (serveur)', () => {
+  it('géocode une ville via Places Text Search', async () => {
+    expect((await geocodeGoogle({ q: 'Lisboa', country: 'PT' }, undefined)).status).toBe(501);
+    let sent: { textQuery: string; regionCode?: string } | undefined;
+    const fake = async (_url: string, init: { body: string }) => {
+      sent = JSON.parse(init.body);
+      return new Response(JSON.stringify({ places: [{ formattedAddress: 'Lisboa, Portugal', location: { latitude: 38.72, longitude: -9.14 } }] }));
+    };
+    const res = await geocodeGoogle({ q: 'Lisboa', country: 'PT' }, 'k', fake);
+    expect(res).toEqual({ status: 200, body: { lat: 38.72, lon: -9.14, label: 'Lisboa, Portugal' } });
+    expect(sent).toMatchObject({ textQuery: 'Lisboa', regionCode: 'PT' });
+  });
+
+  it('ne publie que la clé navigateur, jamais la clé serveur', () => {
+    expect(publicConfig({ GOOGLE_MAPS_API_KEY: 'secret' })).toEqual({ mapsKey: null, mapId: 'DEMO_MAP_ID' });
+    expect(publicConfig({ GOOGLE_MAPS_API_KEY: 'secret', GOOGLE_MAPS_BROWSER_KEY: 'pub' }).mapsKey).toBe('pub');
   });
 });

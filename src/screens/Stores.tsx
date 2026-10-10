@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { StoreMap, type MapPoint } from '../components/StoreMap';
 import { Empty } from '../components/ui';
 import { getChain } from '../data/reference';
-import { findStoresWithFallback, fmtDistance, geocodePlace, getPosition, type NearbyStore } from '../lib/geo';
+import { findNearbyStores, fmtDistance, geocodePlace, getPosition, type NearbyStore } from '../lib/geo';
 import { costOf, fmtMoney } from '../lib/pricing';
 import { REFERENCE_BASKET, storeKey, storeTitle } from '../lib/stores';
 import { uid } from '../lib/text';
@@ -97,7 +97,7 @@ function MapTab() {
       const pos = await where();
       setCenter({ lat: pos.lat, lon: pos.lon });
       actions.updateProfile({ location: { lat: pos.lat, lon: pos.lon } });
-      setNearby(await findStoresWithFallback(pos, profile.country, 4000, true));
+      setNearby(await findNearbyStores(pos, profile.country));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -143,7 +143,7 @@ function MapTab() {
       {nearby.length > 0 && (
         <>
           <p className="small muted">
-            {nearby.length} magasins trouvés · sources : OpenStreetMap{nearby.some((n) => n.source === 'google') ? ' et Google' : ''}
+            {nearby.length} magasins trouvés · Google Maps
           </p>
           <div className="list">
             {nearby.map((n, i) => {

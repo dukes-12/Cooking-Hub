@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { getIngredient } from '../data/ingredients';
 import { ALLERGENS, chainsFor, COUNTRIES, CUISINES, DIETS, EQUIPMENT, getCountry, SPEEDS } from '../data/reference';
-import { findStoresWithFallback, fmtDistance, geocodePlace, getPosition, type NearbyStore } from '../lib/geo';
+import { findNearbyStores, fmtDistance, geocodePlace, getPosition, type NearbyStore } from '../lib/geo';
 import type { Allergen, ChosenStore, Diet, Equipment, Profile, Speed } from '../types';
 import { Chip, ChipGroup, IngredientPicker, Stepper } from './ui';
 
@@ -39,7 +39,7 @@ export function LocationFields({ p, set }: Props) {
     try {
       const pos = await where();
       set({ location: { lat: pos.lat, lon: pos.lon } });
-      const stores = await findStoresWithFallback(pos, p.country);
+      const stores = await findNearbyStores(pos, p.country);
       // Une ligne par enseigne : le magasin le plus proche.
       const seen = new Set<string>();
       setNearby(stores.filter((s) => (seen.has(s.chain.id) ? false : (seen.add(s.chain.id), true))));
@@ -99,7 +99,7 @@ export function LocationFields({ p, set }: Props) {
             ))}
           </div>
         )}
-        {nearby?.some((s) => s.source === 'google') && <p className="small muted">Certains magasins proviennent de Google · les autres d'OpenStreetMap (© contributeurs OpenStreetMap).</p>}
+        {nearby && nearby.length > 0 && <p className="small muted">Magasins fournis par Google Maps.</p>}
         <p className="small muted">Ou sélectionne les enseignes où tu fais tes courses :</p>
         <div className="chips">
           {chains.map((c) => (

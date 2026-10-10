@@ -264,3 +264,33 @@ export async function findStoresGoogle({ lat, lon, radiusM }, apiKey, fetchImpl 
     return { status: 502, body: { error: `Impossible de joindre Google (${e.name === 'TimeoutError' ? 'délai dépassé' : e.message}).` } };
   }
 }
+
+/** Position d'une ville / d'un code postal via Google Places (Text Search), avec la même clé serveur. */
+export async function geocodeGoogle({ q, country }, apiKey, fetchImpl = fetch) {
+  if (!apiKey) return { status: 501, body: { error: 'Recherche Google non configurée : ajoute le secret GOOGLE_MAPS_API_KEY.' } };
+  const query = String(q ?? '').trim().slice(0, 200);
+  if (!query) return { status: 400, body: { error: 'Indique une ville ou un code postal.' } };
+  try {
+    const res = await fetchImpl('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': apiKey, 'X-Goog-FieldMask': 'places.formattedAddress,places.location' },
+      body: JSON.stringify({ textQuery: query, languageCode: 'fr', ...(/^[A-Z]{2}$/.test(country ?? '') ? { regionCode: country } : {}), pageSize: 1 }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return { status: 502, body: { error: `Google a refusé la recherche du lieu (${res.status}).` } };
+    const hit = (await res.json()).places?.[0];
+    if (!hit?.location) return { status: 404, body: { error: `Lieu « ${query} » introuvable.` } };
+    return { status: 200, body: { lat: hit.location.latitude, lon: hit.location.longitude, label: hit.formattedAddress ?? query } };
+  } catch (e) {
+    return { status: 502, body: { error: `Impossible de joindre Google (${e.name === 'TimeoutError' ? 'délai dépassé' : e.message}).` } };
+  }
+}
+
+/**
+ * Réglages publics de l'appli. La carte Google s'affiche dans le navigateur : elle a besoin d'une clé
+ * visible par l'appli, donc d'une clé dédiée (GOOGLE_MAPS_BROWSER_KEY) restreinte au domaine du site
+ * et à l'API Maps JavaScript — jamais la clé serveur.
+ */
+export function publicConfig(env) {
+  return { mapsKey: env.GOOGLE_MAPS_BROWSER_KEY || null, mapId: env.GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID' };
+}

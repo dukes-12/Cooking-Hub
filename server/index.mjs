@@ -1,12 +1,14 @@
 // Serveur Cooking Hub pour le développement local (en ligne, ce sont les Cloudflare Worker de worker/index.js).
 //  - GET  /api/import?url=…  : extrait le bloc schema.org "Recipe" (JSON-LD) d'une page de recette.
+//  - GET  /api/stores, /api/geocode : magasins et lieux via Google Places (GOOGLE_MAPS_API_KEY).
+//  - GET  /api/config        : clé navigateur de la carte Google (GOOGLE_MAPS_BROWSER_KEY).
 //  - POST /api/photo         : lit une recette sur 1 à 4 photos (Claude). Nécessite ANTHROPIC_API_KEY.
 //  - Sert aussi l'app compilée (dist/) après `npm run build`.
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { findStoresGoogle, importFromUrl, receiptFromPhotos, recipeFromPhotos } from './core.mjs';
+import { findStoresGoogle, geocodeGoogle, importFromUrl, publicConfig, receiptFromPhotos, recipeFromPhotos } from './core.mjs';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const DIST = fileURLToPath(new URL('../dist/', import.meta.url));
@@ -47,7 +49,12 @@ async function serveStatic(res, pathname) {
 
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
-  if (url.pathname === '/api/health') return json(res, 200, { ok: true, photo: !!process.env.ANTHROPIC_API_KEY, places: !!process.env.GOOGLE_MAPS_API_KEY });
+  if (url.pathname === '/api/health') return json(res, 200, { ok: true, photo: !!process.env.ANTHROPIC_API_KEY, places: !!process.env.GOOGLE_MAPS_API_KEY, map: !!process.env.GOOGLE_MAPS_BROWSER_KEY });
+  if (url.pathname === '/api/config') return json(res, 200, publicConfig(process.env));
+  if (url.pathname === '/api/geocode') {
+    const { status, body } = await geocodeGoogle({ q: url.searchParams.get('q'), country: url.searchParams.get('country') }, process.env.GOOGLE_MAPS_API_KEY);
+    return json(res, status, body);
+  }
   if (url.pathname === '/api/stores') {
     const q = url.searchParams;
     const { status, body } = await findStoresGoogle({ lat: q.get('lat'), lon: q.get('lon'), radiusM: q.get('radius') }, process.env.GOOGLE_MAPS_API_KEY);
