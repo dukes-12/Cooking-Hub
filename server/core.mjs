@@ -154,3 +154,50 @@ export async function recipeFromPhotos(images, apiKey) {
     return { status: 500, body: { error: 'Analyse de la photo impossible.' } };
   }
 }
+
+// ---------- Magasins autour d'une position (Google Places API "New") ----------
+
+/**
+ * Supermarchés à proximité via Google Places. La clé reste côté serveur (secret GOOGLE_MAPS_API_KEY).
+ * On ne demande que id, nom, adresse et position : ce sont les champs les moins chers, et on ne garde
+ * rien en cache (les conditions de Google n'autorisent à conserver durablement que le place_id).
+ */
+export async function findStoresGoogle({ lat, lon, radiusM }, apiKey, fetchImpl = fetch) {
+  if (!apiKey) return { status: 501, body: { error: 'Recherche Google non configurée : ajoute le secret GOOGLE_MAPS_API_KEY.' } };
+  const la = Number(lat);
+  const lo = Number(lon);
+  if (!Number.isFinite(la) || !Number.isFinite(lo) || Math.abs(la) > 90 || Math.abs(lo) > 180) {
+    return { status: 400, body: { error: 'Position invalide.' } };
+  }
+  const radius = Math.min(5000, Math.max(300, Number(radiusM) || 4000));
+  try {
+    const res = await fetchImpl('https://places.googleapis.com/v1/places:searchNearby', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location',
+      },
+      body: JSON.stringify({
+        includedTypes: ['supermarket', 'grocery_store'],
+        maxResultCount: 20,
+        rankPreference: 'DISTANCE',
+        languageCode: 'fr',
+        locationRestriction: { circle: { center: { latitude: la, longitude: lo }, radius } },
+      }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      const detail = (await res.json().catch(() => ({})))?.error?.status;
+      if (res.status === 403 || res.status === 400) return { status: 502, body: { error: `Google a refusé la requête (${detail ?? res.status}). Vérifie que l'API Places (New) est activée et que la clé n'est pas restreinte à un autre service.` } };
+      return { status: 502, body: { error: `Google indisponible (${res.status}).` } };
+    }
+    const data = await res.json();
+    const stores = (data.places ?? [])
+      .filter((p) => p.location)
+      .map((p) => ({ id: p.id, name: p.displayName?.text ?? '', address: p.formattedAddress ?? '', lat: p.location.latitude, lon: p.location.longitude }));
+    return { status: 200, body: { stores, attribution: 'Google' } };
+  } catch (e) {
+    return { status: 502, body: { error: `Impossible de joindre Google (${e.name === 'TimeoutError' ? 'délai dépassé' : e.message}).` } };
+  }
+}

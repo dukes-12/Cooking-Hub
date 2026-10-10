@@ -6,7 +6,7 @@ import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { importFromUrl, recipeFromPhotos } from './core.mjs';
+import { findStoresGoogle, importFromUrl, recipeFromPhotos } from './core.mjs';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const DIST = fileURLToPath(new URL('../dist/', import.meta.url));
@@ -47,7 +47,12 @@ async function serveStatic(res, pathname) {
 
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
-  if (url.pathname === '/api/health') return json(res, 200, { ok: true });
+  if (url.pathname === '/api/health') return json(res, 200, { ok: true, photo: !!process.env.ANTHROPIC_API_KEY, places: !!process.env.GOOGLE_MAPS_API_KEY });
+  if (url.pathname === '/api/stores') {
+    const q = url.searchParams;
+    const { status, body } = await findStoresGoogle({ lat: q.get('lat'), lon: q.get('lon'), radiusM: q.get('radius') }, process.env.GOOGLE_MAPS_API_KEY);
+    return json(res, status, body);
+  }
   if (url.pathname === '/api/import') {
     const { status, body } = await importFromUrl(url.searchParams.get('url'));
     return json(res, status, body);

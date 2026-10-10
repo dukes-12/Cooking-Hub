@@ -6,6 +6,8 @@ export interface NearbyStore {
   name: string;
   distanceM: number;
   address?: string;
+  /** D'où vient le résultat (Google impose d'afficher son attribution). */
+  source?: 'osm' | 'google';
 }
 
 export function getPosition(): Promise<{ lat: number; lon: number }> {
@@ -64,9 +66,43 @@ export async function findNearbyStores(pos: { lat: number; lon: number }, countr
     const p = el.center ?? (el.lat != null && el.lon != null ? { lat: el.lat, lon: el.lon } : null);
     if (!chain || !p) continue;
     const address = [tags['addr:housenumber'], tags['addr:street'], tags['addr:city']].filter(Boolean).join(' ');
-    stores.push({ chain, name: tags.name || chain.name, distanceM: haversine(pos, p), address: address || undefined });
+    stores.push({ chain, name: tags.name || chain.name, distanceM: haversine(pos, p), address: address || undefined, source: 'osm' });
   }
   return stores.sort((a, b) => a.distanceM - b.distanceM);
+}
+
+/** Supermarchés via Google Places, par notre serveur (la clé n'est jamais dans l'appli). */
+export async function findNearbyStoresGoogle(pos: { lat: number; lon: number }, country: string, radiusM = 4000): Promise<NearbyStore[]> {
+  const res = await fetch(`/api/stores?lat=${pos.lat}&lon=${pos.lon}&radius=${radiusM}`);
+  const data = (await res.json().catch(() => ({}))) as { stores?: { name: string; address: string; lat: number; lon: number }[]; error?: string };
+  if (!res.ok) throw new Error(data.error ?? `Google indisponible (${res.status})`);
+  const out: NearbyStore[] = [];
+  for (const s of data.stores ?? []) {
+    const chain = matchChain(s.name, country);
+    if (chain) out.push({ chain, name: s.name, distanceM: haversine(pos, s), address: s.address, source: 'google' });
+  }
+  return out.sort((a, b) => a.distanceM - b.distanceM);
+}
+
+/** OpenStreetMap d'abord (gratuit) ; Google en complément seulement si OSM trouve moins de 3 enseignes connues. */
+export async function findStoresWithFallback(pos: { lat: number; lon: number }, country: string, radiusM = 4000): Promise<NearbyStore[]> {
+  let osm: NearbyStore[] = [];
+  let osmError: Error | null = null;
+  try {
+    osm = await findNearbyStores(pos, country, radiusM);
+  } catch (e) {
+    osmError = e as Error;
+  }
+  const chains = new Set(osm.map((s) => s.chain.id));
+  if (chains.size >= 3) return osm;
+  try {
+    const google = await findNearbyStoresGoogle(pos, country, radiusM);
+    const have = new Set(osm.map((s) => s.chain.id));
+    return [...osm, ...google.filter((g) => !have.has(g.chain.id))].sort((a, b) => a.distanceM - b.distanceM);
+  } catch (e) {
+    if (osm.length) return osm; // Google non configuré ou en panne : on garde ce qu'OSM a trouvé
+    throw osmError ?? (e as Error);
+  }
 }
 
 export function fmtDistance(m: number): string {

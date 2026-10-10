@@ -163,3 +163,23 @@ describe('dictionnaire multilingue', () => {
     expect(a.quote.unknown).toBe(1);
   });
 });
+
+describe('magasins Google Places', () => {
+  it('interroge Google côté serveur sans exposer la clé et normalise la réponse', async () => {
+    // @ts-expect-error module JS du serveur
+    const { findStoresGoogle } = await import('../server/core.mjs');
+    let seen: { url: string; init: RequestInit } | undefined;
+    const fake = async (url: string, init: RequestInit) => {
+      seen = { url, init };
+      return new Response(JSON.stringify({ places: [{ id: 'p1', displayName: { text: 'Pingo Doce Estrela' }, formattedAddress: 'Rua X, Lisboa', location: { latitude: 38.71, longitude: -9.16 } }] }), { status: 200 });
+    };
+    const r = await findStoresGoogle({ lat: '38.7', lon: '-9.1', radiusM: '99999' }, 'KEY', fake);
+    expect(r.status).toBe(200);
+    expect(r.body.stores[0]).toMatchObject({ name: 'Pingo Doce Estrela', lat: 38.71 });
+    expect(seen!.url).toContain('places.googleapis.com');
+    expect(JSON.parse(seen!.init.body as string).locationRestriction.circle.radius).toBe(5000); // plafonné
+    expect((seen!.init.headers as Record<string, string>)['X-Goog-FieldMask']).not.toMatch(/rating|review|opening/);
+    expect((await findStoresGoogle({ lat: '38.7', lon: '-9.1' }, undefined, fake)).status).toBe(501);
+    expect((await findStoresGoogle({ lat: 'x', lon: '1' }, 'KEY', fake)).status).toBe(400);
+  });
+});

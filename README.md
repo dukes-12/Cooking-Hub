@@ -53,6 +53,7 @@ Prix de référence par ingrédient (France) × indice pays × indice de l'ensei
 Calculée à partir de la base d'ingrédients (valeurs pour 100 g, type Ciqual). Si la source importée donne les calories, elles sont utilisées en priorité. Un indice de fiabilité s'affiche quand des ingrédients ne sont pas reconnus.
 
 ### Géolocalisation
+- **Google Places en secours** : si OpenStreetMap trouve moins de 3 enseignes connues, notre serveur (`/api/stores`) interroge Google Places (secret `GOOGLE_MAPS_API_KEY`, jamais dans le code ni dans l'appli). On ne demande que id, nom, adresse et position, et on ne garde rien en cache. Sans clé, l'appli reste sur OpenStreetMap.
 - Bouton « Trouver les magasins près de moi » : position du téléphone (API Geolocation du navigateur, **HTTPS obligatoire** — OK sur Cloudflare, et sur `localhost`), puis supermarchés à 4 km via OpenStreetMap (API Overpass, gratuite, sans clé), rapprochés des enseignes connues.
 - Si la localisation est refusée : saisie d'une ville ou d'un code postal (géocodage OpenStreetMap Nominatim).
 - En http sur l'IP locale (`http://192.168…:5173`), les navigateurs bloquent la géolocalisation : utilise l'URL Cloudflare.
