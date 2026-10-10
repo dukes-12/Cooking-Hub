@@ -18,7 +18,7 @@ export const CHAINS = [
 const UA = 'CookingHubBot/1.0 (+https://cooking-hub.kronogame.workers.dev; relevé de prix hebdomadaire, quelques pages par heure)';
 const PER_INGREDIENT = 4; // produits suivis par ingrédient et par enseigne
 const PAGES_PER_RUN = 12;
-const URLS_PER_RUN = 5000; // adresses de sitemap traitées par passage (les gros sitemaps sont lus en plusieurs fois)
+const URLS_PER_RUN = 3000; // adresses de sitemap traitées par passage (les gros sitemaps sont lus en plusieurs fois)
 const REDISCOVER_DAYS = 28;
 const PT_FACTOR = 0.9; // indice de prix du Portugal (src/data/reference.ts)
 // Sections non alimentaires des sites (on les ignore même si un mot correspond).
@@ -59,6 +59,39 @@ export function matchUrl(url) {
 export function rankCandidates(urls, brand) {
   const score = (u) => (slugOf(u).includes(`-${brand}-`) ? 0 : 1000) + slugOf(u).length;
   return [...new Set(urls)].sort((a, b) => score(a) - score(b)).slice(0, PER_INGREDIENT);
+}
+
+/**
+ * Adresses <loc> d'un sitemap, lues au fil du téléchargement : seules celles de [from, from + count) sont gardées
+ * et la lecture s'arrête dès que la tranche est complète (les sitemaps des enseignes font jusqu'à 10 Mo).
+ * Renvoie aussi `more` : il reste des adresses après la tranche.
+ */
+export async function streamLocs(body, from, count) {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  const out = [];
+  let buf = '';
+  let seen = 0;
+  for (;;) {
+    const { value, done } = await reader.read();
+    buf += done ? decoder.decode() : decoder.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf('<loc>')) >= 0) {
+      const j = buf.indexOf('</loc>', i);
+      if (j < 0) break;
+      if (seen >= from) out.push(buf.slice(i + 5, j).trim().replace(/&amp;/g, '&'));
+      seen++;
+      buf = buf.slice(j + 6);
+      if (out.length >= count) {
+        await reader.cancel().catch(() => undefined);
+        return { urls: out, more: true };
+      }
+    }
+    // Garde seulement la fin du tampon (une balise <loc> peut être coupée entre deux morceaux).
+    const k = buf.lastIndexOf('<loc>');
+    buf = k >= 0 ? buf.slice(k) : buf.slice(-6);
+    if (done) return { urls: out, more: false };
+  }
 }
 
 const locs = (xml) => [...xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/g)].map((m) => m[1].replace(/&amp;/g, '&'));
@@ -191,15 +224,16 @@ export async function runScraper(env, now = new Date()) {
       const offset = job.offset ?? 0;
       let msg;
       try {
-        const all = locs(await fetchText(job.url));
-        const slice = all.slice(offset, offset + URLS_PER_RUN);
+        const res = await fetch(job.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(60000) });
+        if (!res.ok || !res.body) throw new Error(`${res.status}`);
+        const { urls, more } = await streamLocs(res.body, offset, URLS_PER_RUN);
         const cand = (state.candidates[job.chain] ??= {});
         let hits = 0;
-        for (const u of slice) for (const id of matchUrl(u)) (cand[id] ??= []).push(u), hits++;
+        for (const u of urls) for (const id of matchUrl(u)) (cand[id] ??= []).push(u), hits++;
         const brand = CHAINS.find((c) => c.id === job.chain).brand;
         for (const id of Object.keys(cand)) cand[id] = rankCandidates(cand[id], brand);
-        if (offset + URLS_PER_RUN < all.length) state.sitemaps.unshift({ ...job, offset: offset + URLS_PER_RUN });
-        msg = `sitemap ${job.url} [${offset}-${Math.min(offset + URLS_PER_RUN, all.length)}/${all.length}] : ${hits} correspondances`;
+        if (more) state.sitemaps.unshift({ ...job, offset: offset + URLS_PER_RUN });
+        msg = `sitemap ${job.url} [${offset}-${offset + urls.length}] : ${hits} correspondances`;
       } catch (e) {
         msg = `${job.url}: ${e.message}`;
       }

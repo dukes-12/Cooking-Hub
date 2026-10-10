@@ -483,3 +483,14 @@ describe('prix en ligne des enseignes', () => {
     setChainPrices('PT', { chains: {} });
   });
 });
+
+describe('lecture des sitemaps par flux', () => {
+  it('ne garde que la tranche demandée et s’arrête dès qu’elle est complète', async () => {
+    const { streamLocs } = await import('../worker/scraper.js');
+    const xml = '<urlset>' + Array.from({ length: 10 }, (_, i) => `<url><loc>https://x/p-${i}.html</loc><image:image><image:loc>https://img/${i}.jpg</image:loc></image:image></url>`).join('') + '</urlset>';
+    // Découpé en petits morceaux pour couper des balises entre deux lectures.
+    const body = () => new ReadableStream({ start(c) { const enc = new TextEncoder(); for (let i = 0; i < xml.length; i += 17) c.enqueue(enc.encode(xml.slice(i, i + 17))); c.close(); } });
+    expect(await streamLocs(body(), 0, 3)).toEqual({ urls: ['https://x/p-0.html', 'https://x/p-1.html', 'https://x/p-2.html'], more: true });
+    expect(await streamLocs(body(), 8, 3)).toEqual({ urls: ['https://x/p-8.html', 'https://x/p-9.html'], more: false });
+  });
+});
