@@ -342,3 +342,34 @@ describe('Open Food Facts / Open Prices', () => {
     expect(pricePerKg('poulet', 'pt-pingodoce', 'PT')).toBeCloseTo(estimate);
   });
 });
+
+describe('produits personnels', () => {
+  it('nettoie les libellés de ticket', async () => {
+    const { labelKey, nameFromLabel } = await import('../src/lib/custom');
+    expect(labelKey('MISTURA CEBOLA/ALHO CNT FRS 40G')).toBe('mistura cebola alho cnt frs');
+    expect(labelKey('Mistura cebola/alho CNT FRS 45 g')).toBe('mistura cebola alho cnt frs');
+    expect(nameFromLabel('MISTURA CEBOLA/ALHO CNT FRS 40G')).toBe('Mistura cebola / alho cnt frs');
+  });
+
+  it('crée un produit rattaché à une famille et le reconnaît ensuite sur les tickets', async () => {
+    const { makeCustomProduct } = await import('../src/lib/custom');
+    const { setCustomIngredients } = await import('../src/data/ingredients');
+    const { productForLabel } = await import('../src/lib/receipts');
+    const { categoryFor } = await import('../src/lib/openprices');
+    const herbs = makeCustomProduct({ name: 'Ervas de Provence Margão', aisle: 'divers', unit: 'pc', familyId: 'herbes-provence', label: 'ERVAS DE PROVENCE MARGAO SAQ 25G' });
+    expect(herbs).toMatchObject({ custom: true, family: 'herbes-provence', aisle: 'epices', unit: 'g', kcal: 260 });
+    expect(herbs.id.startsWith('mine:')).toBe(true);
+    const mix = makeCustomProduct({ name: 'Mélange oignon ail', aisle: 'epices', unit: 'g', label: 'MISTURA CEBOLA/ALHO CNT FRS 40G' });
+    expect(mix).toMatchObject({ partial: true, aisle: 'epices' });
+    expect(mix.family).toBeUndefined();
+    setCustomIngredients([herbs, mix]);
+    expect(getIngredient(herbs.id)?.name).toBe('Ervas de Provence Margão');
+    // Même libellé avec un autre format : reconnu grâce au produit personnel.
+    expect(productForLabel('MISTURA CEBOLA/ALHO CNT FRS 45G')).toBe(mix.id);
+    // Libellé appris lors d'un ticket validé : prioritaire.
+    expect(productForLabel('FILETE PEITO FRANGO KG', { 'filete peito frango': herbs.id })).toBe(herbs.id);
+    expect(productForLabel('FILETE PEITO FRANGO KG')).toBe('poulet');
+    expect(categoryFor(herbs.id)).toBe(categoryFor('herbes-provence'));
+    setCustomIngredients([]);
+  });
+});

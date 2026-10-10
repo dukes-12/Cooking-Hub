@@ -1,6 +1,7 @@
 import { go } from '../router';
 import { useMemo, useState } from 'react';
 import { BarcodeSheet } from '../components/BarcodeSheet';
+import { NewProductForm } from '../components/NewProduct';
 import { RecipeRow, useMatches } from '../components/RecipeCard';
 import { Chip, Empty, IngredientPicker, Section, Sheet } from '../components/ui';
 import { AISLE_LABELS, getIngredient } from '../data/ingredients';
@@ -27,6 +28,7 @@ export function Fridge() {
   const [adding, setAdding] = useState<Ingredient | null>(null);
   const [qty, setQty] = useState(0);
   const [barcode, setBarcode] = useState(false);
+  const [newProduct, setNewProduct] = useState<string | null>(null);
 
   const cookNow = useMemo(
     () => matches.filter((m) => m.adapted.status !== 'incompatible' && m.adapted.fridgeCoverage >= 0.4).sort((a, b) => b.adapted.fridgeCoverage - a.adapted.fridgeCoverage || b.score - a.score).slice(0, 4),
@@ -59,7 +61,20 @@ export function Fridge() {
       </header>
       <BarcodeSheet open={barcode} onClose={() => setBarcode(false)} onAdd={(id, q) => actions.addFridge(id, q)} onOpenProduct={(id) => go(`/product/${encodeURIComponent(id)}`)} />
 
-      <IngredientPicker onPick={(ing) => ing && open(ing)} placeholder="Ajouter un produit (ex. courgette)…" />
+      <IngredientPicker onPick={(ing) => ing && open(ing)} onCreate={(text) => setNewProduct(text.charAt(0).toUpperCase() + text.slice(1))} placeholder="Ajouter un produit (ex. courgette)…" />
+      <Sheet open={newProduct != null} onClose={() => setNewProduct(null)} title="Nouveau produit">
+        {newProduct != null && (
+          <NewProductForm
+            initialName={newProduct}
+            onCancel={() => setNewProduct(null)}
+            onCreate={(ing) => {
+              actions.addCustomProduct(ing);
+              setNewProduct(null);
+              open(ing);
+            }}
+          />
+        )}
+      </Sheet>
       <div className="chips scroll-x">
         {QUICK.filter((id) => !state.fridge.some((f) => f.ingredientId === id)).map((id) => (
           <Chip key={id} onClick={() => open(getIngredient(id)!)}>+ {getIngredient(id)!.name}</Chip>

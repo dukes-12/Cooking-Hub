@@ -60,6 +60,10 @@ export interface Ingredient {
   staple?: boolean;
   /** Reconnu par le dictionnaire multilingue mais sans nutrition ni prix de référence. */
   partial?: boolean;
+  /** Produit créé par l'utilisateur (id "mine:…"). */
+  custom?: boolean;
+  /** Grande famille de rattachement (ex. un sachet d'herbes de marque → "herbes-provence"). */
+  family?: string;
 }
 
 export type Unit = BaseUnit | 'kg' | 'cl' | 'l' | 'cas' | 'cac' | 'pincee' | 'gousse' | 'tranche' | 'botte' | 'sachet';
@@ -230,4 +234,8 @@ export interface AppState {
   shopping: ShoppingItem[];
   imported: Recipe[];
   receipts: Receipt[];
+  /** Produits créés depuis un ticket ou la recherche. */
+  customProducts: Ingredient[];
+  /** Libellé de ticket normalisé → produit : appris à chaque ticket validé. */
+  labelMemory: Record<string, string>;
 }

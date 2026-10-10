@@ -1,7 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { SEED_RECIPES } from './data/recipes';
-import { getIngredient } from './data/ingredients';
-import type { AppState, ChosenStore, FridgeItem, PlannedMeal, Profile, Receipt, Recipe, ShoppingItem } from './types';
+import { getIngredient, setCustomIngredients } from './data/ingredients';
+import { labelKey } from './lib/custom';
+import type { AppState, ChosenStore, FridgeItem, Ingredient, PlannedMeal, Profile, Receipt, Recipe, ShoppingItem } from './types';
 import { observationsFromReceipts } from './lib/receipts';
 import { setObservedPrices } from './lib/pricing';
 import { storeKey } from './lib/stores';
@@ -36,6 +37,8 @@ const INITIAL: AppState = {
   shopping: [],
   imported: [],
   receipts: [],
+  customProducts: [],
+  labelMemory: {},
 };
 
 function load(): AppState {
@@ -51,6 +54,8 @@ function load(): AppState {
 
 function useStore() {
   const [state, setState] = useState<AppState>(load);
+  // Les produits personnels doivent être connus avant tout rendu (getIngredient("mine:…")).
+  setCustomIngredients(state.customProducts);
 
   useEffect(() => {
     try {
@@ -162,12 +167,25 @@ function useStore() {
               : [{ ingredientId, qty, addedAt: Date.now() }, ...fridge];
           }
           const stores = newStore && !s.profile.stores.some((x) => storeKey(x) === storeKey(newStore)) ? [...s.profile.stores, newStore] : s.profile.stores;
+          // L'appli retient l'article choisi pour chaque libellé : le prochain ticket le reconnaîtra tout seul.
+          const labelMemory = { ...s.labelMemory };
+          for (const l of receipt.lines) if (l.productId && labelKey(l.label)) labelMemory[labelKey(l.label)] = l.productId;
           return {
             fridge,
             profile: { ...s.profile, stores },
             receipts: [receipt, ...s.receipts.filter((r) => r.id !== receipt.id)],
+            labelMemory,
           };
         }),
+      addCustomProduct: (ing: Ingredient) => patch((s) => ({ customProducts: [...s.customProducts.filter((x) => x.id !== ing.id), ing] })),
+      updateCustomProduct: (id: string, patchIng: Partial<Ingredient>) =>
+        patch((s) => ({ customProducts: s.customProducts.map((x) => (x.id === id ? { ...x, ...patchIng, id } : x)) })),
+      deleteCustomProduct: (id: string) =>
+        patch((s) => ({
+          customProducts: s.customProducts.filter((x) => x.id !== id),
+          fridge: s.fridge.filter((f) => f.ingredientId !== id),
+          labelMemory: Object.fromEntries(Object.entries(s.labelMemory).filter(([, v]) => v !== id)),
+        })),
       deleteReceipt: (id: string) => patch((s) => ({ receipts: s.receipts.filter((r) => r.id !== id) })),
 
       saveImported: (r: Recipe) => patch((s) => ({ imported: [r, ...s.imported.filter((x) => x.id !== r.id)] })),

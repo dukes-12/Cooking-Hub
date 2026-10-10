@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Chip, Empty, Section } from '../components/ui';
-import { AISLE_LABELS, getIngredient } from '../data/ingredients';
+import { AISLE_LABELS, customIngredients, getIngredient } from '../data/ingredients';
 import { getChain, getCountry } from '../data/reference';
 import { productImage, type ProductImage } from '../lib/images';
 import { entryForProduct, lexName, useLexiconReady } from '../lib/lexicon';
@@ -53,6 +53,8 @@ export function Product({ id }: { id: string }) {
   const flat = useMemo(() => everywhere.flatMap((g) => g.prices).sort((a, b) => a.perKg! - b.perKg!), [everywhere]);
   const used = useMemo(() => recipesUsing(id, recipes), [id, recipes]);
   const history = observations.filter((o) => o.productId === id);
+  // Grande famille : tes produits rattachés à celui-ci (ex. sachets d'herbes de différentes marques).
+  const variants = customIngredients().filter((c) => c.family === id);
   const community = useMemo(() => communityStats(id, country), [id, country, cv]); // eslint-disable-line react-hooks/exhaustive-deps
   const offNutrition = useMemo(() => medianNutrition(offProducts), [offProducts]);
   // Pas de photo Wikimedia : celle du produit le plus scanné du rayon (Open Food Facts).
@@ -92,6 +94,12 @@ export function Product({ id }: { id: string }) {
       <div>
         <p className="small muted">{aisle.emoji} {aisle.label}</p>
         <h1>{ing.name}</h1>
+        {ing.custom && (
+          <p className="small">
+            <span className="badge badge-good">Mon produit</span>{' '}
+            {ing.family && <button className="link" onClick={() => go(`/product/${encodeURIComponent(ing.family!)}`)}>Famille : {getIngredient(ing.family)?.name}</button>}
+          </p>
+        )}
         {entry && <p className="small muted">🇵🇹 {lexName(entry, 'pt')} · 🇬🇧 {lexName(entry, 'en')}</p>}
       </div>
 
@@ -254,6 +262,28 @@ export function Product({ id }: { id: string }) {
             ))}
           </div>
         </Section>
+      )}
+
+      {variants.length > 0 && (
+        <Section title="Mes produits de cette famille">
+          <div className="price-table">
+            {variants.map((v) => {
+              const obs = observations.filter((o) => o.productId === v.id);
+              return (
+                <button key={v.id} className="price-row" onClick={() => go(`/product/${encodeURIComponent(v.id)}`)}>
+                  <span className="grow">{v.name}<span className="small muted block">{obs.length ? `${obs.length} achat${obs.length > 1 ? 's' : ''}` : 'pas encore acheté'}</span></span>
+                  <b>{obs[0] ? (obs[0].pricePerKg != null ? `${fmtMoney(obs[0].pricePerKg, obs[0].country)}${unit}` : `${fmtMoney(obs[0].unitPrice, obs[0].country)}/u.`) : '›'}</b>
+                </button>
+              );
+            })}
+          </div>
+        </Section>
+      )}
+
+      {ing.custom && (
+        <button className="btn btn-ghost danger-text" onClick={() => { if (confirm(`Supprimer « ${ing.name} » de tes produits ? Il sera retiré du frigo ; les tickets gardent leurs lignes.`)) { actions.deleteCustomProduct(ing.id); back('/stores'); } }}>
+          Supprimer ce produit
+        </button>
       )}
 
       {used.length > 0 && (

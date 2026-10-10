@@ -138,7 +138,7 @@ export const INGREDIENTS: Ingredient[] = [
   ing('cumin', 'Cumin', 'epices', 'g', [375, 18, 44, 22], 30, [], { aliases: [] , staple: true }),
   ing('paprika', 'Paprika', 'epices', 'g', [280, 14, 54, 13], 30, [], { aliases: ['paprika fume', 'piment doux'], staple: true }),
   ing('curry', 'Curry en poudre', 'epices', 'g', [325, 14, 55, 14], 30, [], { aliases: ['curry', 'pate de curry', 'garam masala'], staple: true }),
-  ing('herbes-provence', 'Herbes de Provence', 'epices', 'g', [260, 9, 60, 7], 35, [], { aliases: ['thym', 'romarin', 'origan', 'laurier', 'herbes de provence'], staple: true }),
+  ing('herbes-provence', 'Herbes de Provence', 'epices', 'g', [260, 9, 60, 7], 35, [], { aliases: ['thym', 'romarin', 'origan', 'laurier', 'herbes de provence', 'ervas de provence', 'ervas da provenca'], staple: true }),
   ing('cannelle', 'Cannelle', 'epices', 'g', [250, 4, 80, 1], 35, [], { aliases: [], staple: true }),
   ing('piment', 'Piment', 'epices', 'g', [300, 12, 50, 14], 40, [], { aliases: ['piment d espelette', 'piment de cayenne', 'flocons de piment'], staple: true }),
   ing('vanille', 'Sucre vanillé', 'epices', 'g', [400, 0, 100, 0], 12, [], { aliases: ['extrait de vanille', 'sucre vanille', 'vanille'] }),
@@ -152,8 +152,19 @@ export function registerLexiconResolver(fn: (id: string) => Ingredient | undefin
   lexResolver = fn;
 }
 
+/** Produits créés par l'utilisateur ("mine:…"), fournis par l'état de l'app. */
+const CUSTOM = new Map<string, Ingredient>();
+export function setCustomIngredients(list: Ingredient[]) {
+  CUSTOM.clear();
+  for (const i of list) CUSTOM.set(i.id, i);
+}
+export function customIngredients(): Ingredient[] {
+  return [...CUSTOM.values()];
+}
+
 export function getIngredient(id: string | undefined): Ingredient | undefined {
   if (!id) return undefined;
+  if (id.startsWith('mine:')) return CUSTOM.get(id);
   const own = INGREDIENT_BY_ID[id];
   if (own || !id.startsWith('lex:')) return own;
   // Dictionnaire pas encore chargé (hors-ligne, premier affichage) : on fabrique l'ingrédient depuis son identifiant.

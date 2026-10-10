@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { INGREDIENTS } from '../data/ingredients';
+import { customIngredients, INGREDIENTS } from '../data/ingredients';
 import { ingredientFromEntry, searchLexicon, useLexiconReady } from '../lib/lexicon';
 import { normalize } from '../lib/text';
 import type { Ingredient } from '../types';
@@ -83,13 +83,13 @@ export function Section({ title, action, children }: { title: string; action?: R
 }
 
 /** Recherche d'ingrédient avec autocomplétion sur la base de référence. */
-export function IngredientPicker({ onPick, exclude = [], placeholder = 'Rechercher un ingrédient…', allowFree }: { onPick: (ing: Ingredient | null, text: string) => void; exclude?: string[]; placeholder?: string; allowFree?: boolean }) {
-  const [q, setQ] = useState('');
+export function IngredientPicker({ onPick, exclude = [], placeholder = 'Rechercher un ingrédient…', allowFree, onCreate, initial = '' }: { onPick: (ing: Ingredient | null, text: string) => void; exclude?: string[]; placeholder?: string; allowFree?: boolean; onCreate?: (text: string) => void; initial?: string }) {
+  const [q, setQ] = useState(initial);
   const lexReady = useLexiconReady();
   const results = useMemo(() => {
     const n = normalize(q);
     if (!n) return [];
-    const own = INGREDIENTS.filter((i) => !exclude.includes(i.id))
+    const own = [...customIngredients(), ...INGREDIENTS].filter((i) => !exclude.includes(i.id))
       .map((i) => {
         const names = [i.name, ...i.aliases].map(normalize);
         const rank = names.some((x) => x.startsWith(n)) ? 0 : names.some((x) => x.includes(n)) ? 1 : 2;
@@ -132,7 +132,8 @@ export function IngredientPicker({ onPick, exclude = [], placeholder = 'Recherch
           {results.map((r) => (
             <button key={r.id} type="button" onClick={() => pick(r)}>
               {r.name}
-              {r.partial && <span className="muted small"> · {[...new Set(r.aliases.map((a) => a.toLowerCase()))].filter((a) => a !== r.name.toLowerCase()).slice(0, 2).join(' · ')}</span>}
+              {r.custom && <span className="badge badge-good">à moi</span>}
+              {r.partial && !r.custom && <span className="muted small"> · {[...new Set(r.aliases.map((a) => a.toLowerCase()))].filter((a) => a !== r.name.toLowerCase()).slice(0, 2).join(' · ')}</span>}
             </button>
           ))}
           {allowFree && q.trim() && (
@@ -140,7 +141,12 @@ export function IngredientPicker({ onPick, exclude = [], placeholder = 'Recherch
               Ajouter « {q.trim()} »
             </button>
           )}
-          {!results.length && !allowFree && <div className="muted small pad">Aucun ingrédient trouvé</div>}
+          {onCreate && q.trim() && (
+            <button type="button" className="picker-create" onClick={() => onCreate(q.trim())}>
+              ＋ Créer le produit « {q.trim()} »
+            </button>
+          )}
+          {!results.length && !allowFree && !onCreate && <div className="muted small pad">Aucun ingrédient trouvé</div>}
         </div>
       )}
     </div>

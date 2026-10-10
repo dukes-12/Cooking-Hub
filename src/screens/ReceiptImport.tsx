@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { NewProductForm } from '../components/NewProduct';
 import { IngredientPicker, Sheet } from '../components/ui';
+import { nameFromLabel } from '../lib/custom';
 import { getIngredient } from '../data/ingredients';
 import { chainsFor, getChain } from '../data/reference';
 import { shrinkPhoto } from '../lib/importer';
@@ -50,7 +52,7 @@ export function ReceiptImport({ storeKey: presetKey }: { storeKey?: string }) {
     setLoading(true);
     try {
       const images = await Promise.all(photos.map((f) => shrinkPhoto(f, 2000)));
-      start(draftFromApi(await readReceiptPhotos(images), state.profile.stores, country));
+      start(draftFromApi(await readReceiptPhotos(images), state.profile.stores, country, state.labelMemory));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -126,9 +128,10 @@ export function ReceiptImport({ storeKey: presetKey }: { storeKey?: string }) {
 }
 
 function ReceiptReview({ draft, onChange, onCancel, onConfirm }: { draft: ReceiptDraft; onChange: (d: ReceiptDraft) => void; onCancel: () => void; onConfirm: (d: ReceiptDraft) => void }) {
-  const { state } = useApp();
+  const { state, actions } = useApp();
   const { receipt, newStore } = draft;
   const [picking, setPicking] = useState<string | null>(null);
+  const [newProduct, setNewProduct] = useState<string | null>(null);
   const [newChain, setNewChain] = useState(newStore?.chainId ?? '');
   const [newName, setNewName] = useState(newStore?.label ?? '');
 
@@ -226,7 +229,7 @@ function ReceiptReview({ draft, onChange, onCancel, onConfirm }: { draft: Receip
                 <button className="icon-btn sm" onClick={() => setReceipt({ lines: receipt.lines.filter((x) => x.id !== l.id) })} aria-label="Supprimer la ligne">✕</button>
               </div>
               <button className="ticket-product" onClick={() => setPicking(l.id)}>
-                {ing ? <>→ <b>{ing.name}</b></> : <span className="warn-text">⚠️ Associer à un produit</span>}
+                {ing ? <>→ <b>{ing.name}</b>{ing.custom && <span className="badge badge-good">à moi</span>}</> : <span className="warn-text">⚠️ Associer ou créer un produit</span>}
                 <span className="small muted"> ✎</span>
               </button>
               <div className="ticket-fields">
@@ -272,24 +275,48 @@ function ReceiptReview({ draft, onChange, onCancel, onConfirm }: { draft: Receip
             Écart de {money(Math.abs(gap))} avec le total imprimé ({money(receipt.total)}) : une ligne manque ou un prix est mal lu (les remises comptent comme des lignes négatives).
           </p>
         )}
-        {unmatched > 0 && <p className="small muted">{unmatched} article{unmatched > 1 ? 's' : ''} non associé{unmatched > 1 ? 's' : ''} : gardé{unmatched > 1 ? 's' : ''} dans le ticket, sans prix enregistré pour le produit.</p>}
+        {unmatched > 0 && <p className="small muted">{unmatched} article{unmatched > 1 ? 's' : ''} non associé{unmatched > 1 ? 's' : ''} : gardé{unmatched > 1 ? 's' : ''} dans le ticket, sans prix enregistré. Touche « Associer ou créer » pour l'ajouter à tes produits.</p>}
         <button className="btn btn-primary btn-block" disabled={!canSave} onClick={confirm}>
           ✓ Valider le ticket{toFridge ? ` · ${toFridge} article${toFridge > 1 ? 's' : ''} au frigo` : ''}
         </button>
       </div>
 
-      <Sheet open={!!pickingLine} onClose={() => setPicking(null)} title={pickingLine ? `« ${pickingLine.label || 'Article'} »` : ''}>
-        <IngredientPicker
-          placeholder="Quel produit est-ce ?"
-          onPick={(ing) => {
-            if (ing && pickingLine) setLine(pickingLine.id, { productId: ing.id, toFridge: true });
-            setPicking(null);
-          }}
-        />
-        {pickingLine?.productId && (
-          <button className="btn btn-ghost btn-block" onClick={() => { setLine(pickingLine.id, { productId: undefined, toFridge: false }); setPicking(null); }}>
-            Ce n'est pas un aliment (ne pas associer)
-          </button>
+      <Sheet open={!!pickingLine} onClose={() => { setPicking(null); setNewProduct(null); }} title={newProduct != null ? 'Nouveau produit' : pickingLine ? `« ${pickingLine.label || 'Article'} »` : ''}>
+        {newProduct != null && pickingLine ? (
+          <NewProductForm
+            key={pickingLine.id}
+            initialName={newProduct}
+            label={pickingLine.label}
+            onCancel={() => setNewProduct(null)}
+            onCreate={(ing) => {
+              actions.addCustomProduct(ing);
+              setLine(pickingLine.id, { productId: ing.id, toFridge: true });
+              setNewProduct(null);
+              setPicking(null);
+            }}
+          />
+        ) : (
+          <>
+            <IngredientPicker
+              placeholder="Quel produit est-ce ?"
+              onCreate={(text) => setNewProduct(text)}
+              onPick={(ing) => {
+                if (ing && pickingLine) setLine(pickingLine.id, { productId: ing.id, toFridge: true });
+                setPicking(null);
+              }}
+            />
+            {pickingLine && (
+              <button className="btn btn-soft btn-block" onClick={() => setNewProduct(nameFromLabel(pickingLine.label))}>
+                ＋ Nouveau produit « {nameFromLabel(pickingLine.label) || 'Article'} »
+              </button>
+            )}
+            <p className="small muted">Nouveau dans l'appli ? Crée-le : il gardera ses prix et sera reconnu automatiquement sur tes prochains tickets.</p>
+            {pickingLine?.productId && (
+              <button className="btn btn-ghost btn-block" onClick={() => { setLine(pickingLine.id, { productId: undefined, toFridge: false }); setPicking(null); }}>
+                Ce n'est pas un aliment (ne pas associer)
+              </button>
+            )}
+          </>
         )}
       </Sheet>
     </div>

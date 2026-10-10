@@ -370,3 +370,7 @@ div.ticket > .ticket-line.is-unmatched { border-left-color: var(--warn); }
 .nutriscore { width: 26px; height: 26px; border-radius: 7px; color: #fff; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; flex: none; }
 .ns-a { background: #038141; } .ns-b { background: #85bb2f; } .ns-c { background: #e6b800; } .ns-d { background: #ee8100; } .ns-e { background: #e63e11; }
 .scan-video { width: 100%; max-height: 260px; border-radius: 12px; background: #000; object-fit: cover; }
+.picker-results .picker-create { color: var(--primary); font-weight: 700; }
+.new-product { display: flex; flex-direction: column; gap: 0.8rem; }
+.chosen-family { background: var(--surface-2); border-radius: 12px; padding: 0.5rem 0.7rem; }
+.ticket-product .badge, .picker-results .badge { margin-left: 0.4rem; }

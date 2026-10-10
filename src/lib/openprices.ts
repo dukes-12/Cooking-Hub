@@ -40,6 +40,11 @@ const CATEGORY_OVERRIDES: Record<string, string> = {
 
 /** Catégorie Open Food Facts d'un ingrédient de l'appli, si on la connaît. */
 export function categoryFor(ingredientId: string): string | undefined {
+  // Produit personnel : la catégorie de sa grande famille.
+  if (ingredientId.startsWith('mine:')) {
+    const family = getIngredient(ingredientId)?.family;
+    return family ? categoryFor(family) : undefined;
+  }
   return CATEGORY_OVERRIDES[ingredientId] ?? entryForProduct(ingredientId)?.k;
 }
 

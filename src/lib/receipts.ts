@@ -2,6 +2,7 @@ import { getIngredient } from '../data/ingredients';
 import { getChain } from '../data/reference';
 import type { ChosenStore, Ingredient, Receipt, ReceiptLine, SizeUnit } from '../types';
 import { matchChain } from './geo';
+import { labelKey, matchCustom } from './custom';
 import { matchIngredient } from './importer';
 import { storeKey } from './stores';
 import { normalize, uid } from './text';
@@ -128,12 +129,19 @@ export function matchReceiptStore(storeName: string, address: string, stores: Ch
   };
 }
 
-export function draftFromApi(api: ApiReceipt, stores: ChosenStore[], country: string): ReceiptDraft {
+/** Produit d'un libellé de ticket : d'abord ce que tu as appris à l'appli, puis tes produits, puis le dictionnaire. */
+export function productForLabel(label: string, memory: Record<string, string> = {}): string | undefined {
+  const remembered = memory[labelKey(label)];
+  if (remembered && getIngredient(remembered)) return remembered;
+  return matchCustom(label) ?? matchIngredient(label);
+}
+
+export function draftFromApi(api: ApiReceipt, stores: ChosenStore[], country: string, memory: Record<string, string> = {}): ReceiptDraft {
   const { store, newStore } = matchReceiptStore(api.storeName, api.storeAddress, stores, country);
   const target = store ?? newStore;
   const lines: ReceiptLine[] = api.lines.map((l) => {
     const fromLabel = !l.size && !l.weightKg ? sizeFromLabel(l.label) : null;
-    const productId = matchIngredient(l.label);
+    const productId = productForLabel(l.label, memory);
     return {
       id: uid('ln-'),
       label: l.label,
