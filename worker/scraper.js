@@ -18,6 +18,7 @@ export const CHAINS = [
 const UA = 'CookingHubBot/1.0 (+https://cooking-hub.kronogame.workers.dev; relevé de prix hebdomadaire, quelques pages par heure)';
 const PER_INGREDIENT = 4; // produits suivis par ingrédient et par enseigne
 const PAGES_PER_RUN = 12;
+const URLS_PER_RUN = 5000; // adresses de sitemap traitées par passage (les gros sitemaps sont lus en plusieurs fois)
 const REDISCOVER_DAYS = 28;
 const PT_FACTOR = 0.9; // indice de prix du Portugal (src/data/reference.ts)
 // Sections non alimentaires des sites (on les ignore même si un mot correspond).
@@ -42,8 +43,12 @@ export function slugOf(url) {
 // Filtre rapide (une seule expression) avant la vérification détaillée : les sitemaps comptent des dizaines de milliers d'adresses.
 const ANY_RE = new RegExp(`-(?:${[...new Set(CATALOG.flatMap((e) => e.any))].map((a) => a.replace(/[-]/g, '\\-')).join('|')})-`);
 
+// Pré-filtre encore plus léger, sur l'adresse brute (sans normalisation).
+const RAW_RE = new RegExp(`[/-](?:${[...new Set(CATALOG.flatMap((e) => e.any))].join('|')})[-/.]`, 'i');
+
 /** Ingrédients du catalogue auxquels correspond une page produit. */
 export function matchUrl(url) {
+  if (!RAW_RE.test(url) && !url.includes('%')) return [];
   if (NON_FOOD.test(url)) return [];
   if (!ANY_RE.test(slugOf(url))) return [];
   const s = slugOf(url);
@@ -169,20 +174,35 @@ export async function runScraper(env, now = new Date()) {
       await kv.put('scrape:state', JSON.stringify(state));
       return `découverte : ${state.sitemaps.length} sitemaps`;
     }
+    // Le passage précédent s'est arrêté en cours de route (limite de temps de calcul) : on le note et on continue.
+    if (state.current) {
+      state.log.push(`échec : ${state.current.url} à partir de ${state.current.offset ?? 0}`);
+      state.current = null;
+    }
     const job = state.sitemaps.shift();
     if (job) {
       // Progression enregistrée avant le travail : un passage qui échoue ne bloque pas le cycle sur ce fichier.
+      state.current = job;
       await kv.put('scrape:state', JSON.stringify(state));
+      const offset = job.offset ?? 0;
+      let msg;
       try {
+        const all = locs(await fetchText(job.url));
+        const slice = all.slice(offset, offset + URLS_PER_RUN);
         const cand = (state.candidates[job.chain] ??= {});
-        for (const u of locs(await fetchText(job.url))) for (const id of matchUrl(u)) (cand[id] ??= []).push(u);
+        let hits = 0;
+        for (const u of slice) for (const id of matchUrl(u)) (cand[id] ??= []).push(u), hits++;
         const brand = CHAINS.find((c) => c.id === job.chain).brand;
         for (const id of Object.keys(cand)) cand[id] = rankCandidates(cand[id], brand);
+        if (offset + URLS_PER_RUN < all.length) state.sitemaps.unshift({ ...job, offset: offset + URLS_PER_RUN });
+        msg = `sitemap ${job.url} [${offset}-${Math.min(offset + URLS_PER_RUN, all.length)}/${all.length}] : ${hits} correspondances`;
       } catch (e) {
-        state.log.push(`${job.url}: ${e.message}`);
+        msg = `${job.url}: ${e.message}`;
       }
+      state.current = null;
+      state.log = [...state.log, msg].slice(-30);
       await kv.put('scrape:state', JSON.stringify(state));
-      return `sitemap lu : ${job.url}`;
+      return msg;
     }
     await kv.put('scrape:tracked', JSON.stringify({ at: now.getTime(), chains: state.candidates }));
     Object.assign(state, { phase: 'prices', candidates: undefined, sitemaps: undefined });
