@@ -6,6 +6,8 @@ export interface NearbyStore {
   name: string;
   distanceM: number;
   address?: string;
+  lat: number;
+  lon: number;
   /** D'où vient le résultat (Google impose d'afficher son attribution). */
   source?: 'osm' | 'google';
 }
@@ -66,7 +68,7 @@ export async function findNearbyStores(pos: { lat: number; lon: number }, countr
     const p = el.center ?? (el.lat != null && el.lon != null ? { lat: el.lat, lon: el.lon } : null);
     if (!chain || !p) continue;
     const address = [tags['addr:housenumber'], tags['addr:street'], tags['addr:city']].filter(Boolean).join(' ');
-    stores.push({ chain, name: tags.name || chain.name, distanceM: haversine(pos, p), address: address || undefined, source: 'osm' });
+    stores.push({ chain, name: tags.name || chain.name, distanceM: haversine(pos, p), address: address || undefined, lat: p.lat, lon: p.lon, source: 'osm' });
   }
   return stores.sort((a, b) => a.distanceM - b.distanceM);
 }
@@ -79,13 +81,13 @@ export async function findNearbyStoresGoogle(pos: { lat: number; lon: number }, 
   const out: NearbyStore[] = [];
   for (const s of data.stores ?? []) {
     const chain = matchChain(s.name, country);
-    if (chain) out.push({ chain, name: s.name, distanceM: haversine(pos, s), address: s.address, source: 'google' });
+    if (chain) out.push({ chain, name: s.name, distanceM: haversine(pos, s), address: s.address, lat: s.lat, lon: s.lon, source: 'google' });
   }
   return out.sort((a, b) => a.distanceM - b.distanceM);
 }
 
 /** OpenStreetMap d'abord (gratuit) ; Google en complément seulement si OSM trouve moins de 3 enseignes connues. */
-export async function findStoresWithFallback(pos: { lat: number; lon: number }, country: string, radiusM = 4000): Promise<NearbyStore[]> {
+export async function findStoresWithFallback(pos: { lat: number; lon: number }, country: string, radiusM = 4000, wantAll = false): Promise<NearbyStore[]> {
   let osm: NearbyStore[] = [];
   let osmError: Error | null = null;
   try {
@@ -94,11 +96,13 @@ export async function findStoresWithFallback(pos: { lat: number; lon: number }, 
     osmError = e as Error;
   }
   const chains = new Set(osm.map((s) => s.chain.id));
-  if (chains.size >= 3) return osm;
+  if (chains.size >= 3 && !wantAll) return osm;
   try {
     const google = await findNearbyStoresGoogle(pos, country, radiusM);
-    const have = new Set(osm.map((s) => s.chain.id));
-    return [...osm, ...google.filter((g) => !have.has(g.chain.id))].sort((a, b) => a.distanceM - b.distanceM);
+    // Sur la carte on veut tous les magasins ; à l'inscription, une ligne par enseigne suffit.
+    const near = (a: NearbyStore, b: NearbyStore) => a.chain.id === b.chain.id && haversine(a, b) < 150;
+    const extra = google.filter((g) => !osm.some((o) => near(o, g)));
+    return [...osm, ...extra].sort((a, b) => a.distanceM - b.distanceM);
   } catch (e) {
     if (osm.length) return osm; // Google non configuré ou en panne : on garde ce qu'OSM a trouvé
     throw osmError ?? (e as Error);

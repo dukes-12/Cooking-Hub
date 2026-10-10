@@ -94,18 +94,20 @@ Si les images ne contiennent pas de recette, mets found à false et laisse les l
 
 const MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
-/** images : [{ mediaType, data (base64) }] */
-export async function recipeFromPhotos(images, apiKey) {
+/**
+ * Envoie 1 à 4 photos à Claude avec une consigne et un schéma JSON (sortie structurée).
+ * Renvoie { status, data } ou { status, body: { error } }.
+ */
+async function readPhotosWithClaude(images, prompt, schema, apiKey, what) {
   if (!apiKey) {
-    return { status: 501, body: { error: 'Import photo non configuré : ajoute la variable ANTHROPIC_API_KEY côté serveur.' } };
+    return { status: 501, body: { error: 'Lecture de photo non configurée : ajoute la variable ANTHROPIC_API_KEY côté serveur.' } };
   }
   if (!Array.isArray(images) || images.length === 0 || images.length > 4) {
     return { status: 400, body: { error: 'Envoie entre 1 et 4 photos.' } };
   }
-  if (images.some((i) => !MEDIA_TYPES.includes(i?.mediaType) || typeof i?.data !== 'string' || i.data.length > 6_000_000)) {
+  if (images.some((i) => !MEDIA_TYPES.includes(i?.mediaType) || typeof i?.data !== 'string' || i.data.length > 8_000_000)) {
     return { status: 400, body: { error: 'Format de photo non pris en charge.' } };
   }
-
   const client = new Anthropic({ apiKey });
   try {
     const response = await client.beta.messages.create({
@@ -113,46 +115,107 @@ export async function recipeFromPhotos(images, apiKey) {
       max_tokens: 16000,
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: 'default',
-      output_config: { effort: 'low', format: { type: 'json_schema', schema: RECIPE_SCHEMA } },
+      output_config: { effort: 'low', format: { type: 'json_schema', schema } },
       messages: [
         {
           role: 'user',
           content: [
             ...images.map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.mediaType, data: i.data } })),
-            { type: 'text', text: PHOTO_PROMPT },
+            { type: 'text', text: prompt },
           ],
         },
       ],
     });
     if (response.stop_reason === 'refusal') return { status: 422, body: { error: 'La photo n’a pas pu être analysée.' } };
-    if (response.stop_reason === 'max_tokens') return { status: 422, body: { error: 'Recette trop longue pour être lue en une fois.' } };
+    if (response.stop_reason === 'max_tokens') return { status: 422, body: { error: `${what} trop long(ue) pour être lu(e) en une fois.` } };
     const text = response.content.find((b) => b.type === 'text')?.text;
-    const data = JSON.parse(text ?? '{}');
-    if (!data.found) return { status: 422, body: { error: 'Aucune recette détectée sur la photo.' } };
-    // Format schema.org Recipe, pour réutiliser le même convertisseur que l'import par lien.
-    return {
-      status: 200,
-      body: {
-        recipe: {
-          '@type': 'Recipe',
-          name: data.name,
-          recipeYield: String(data.servings),
-          prepTime: data.prepMinutes ? `PT${data.prepMinutes}M` : undefined,
-          cookTime: data.cookMinutes ? `PT${data.cookMinutes}M` : undefined,
-          recipeCategory: data.category,
-          recipeCuisine: data.cuisine,
-          recipeIngredient: data.ingredients,
-          recipeInstructions: data.steps,
-        },
-        siteName: 'Photo',
-      },
-    };
+    return { status: 200, data: JSON.parse(text ?? '{}') };
   } catch (e) {
     if (e instanceof Anthropic.RateLimitError) return { status: 429, body: { error: 'Trop de demandes, réessaie dans une minute.' } };
     if (e instanceof Anthropic.AuthenticationError) return { status: 500, body: { error: 'Clé API Anthropic invalide côté serveur.' } };
     if (e instanceof Anthropic.APIError) return { status: 502, body: { error: `Erreur du service d’analyse (${e.status ?? 'réseau'}).` } };
     return { status: 500, body: { error: 'Analyse de la photo impossible.' } };
   }
+}
+
+/** images : [{ mediaType, data (base64) }] */
+export async function recipeFromPhotos(images, apiKey) {
+  const r = await readPhotosWithClaude(images, PHOTO_PROMPT, RECIPE_SCHEMA, apiKey, 'Recette');
+  if (!r.data) return r;
+  const data = r.data;
+  if (!data.found) return { status: 422, body: { error: 'Aucune recette détectée sur la photo.' } };
+  // Format schema.org Recipe, pour réutiliser le même convertisseur que l'import par lien.
+  return {
+    status: 200,
+    body: {
+      recipe: {
+        '@type': 'Recipe',
+        name: data.name,
+        recipeYield: String(data.servings),
+        prepTime: data.prepMinutes ? `PT${data.prepMinutes}M` : undefined,
+        cookTime: data.cookMinutes ? `PT${data.cookMinutes}M` : undefined,
+        recipeCategory: data.category,
+        recipeCuisine: data.cuisine,
+        recipeIngredient: data.ingredients,
+        recipeInstructions: data.steps,
+      },
+      siteName: 'Photo',
+    },
+  };
+}
+
+// ---------- Ticket de caisse ----------
+
+const nullable = (type) => ({ anyOf: [{ type }, { type: 'null' }] });
+
+const RECEIPT_SCHEMA = {
+  type: 'object',
+  properties: {
+    found: { type: 'boolean', description: "false si l'image n'est pas un ticket de caisse" },
+    storeName: { type: 'string', description: 'Enseigne et magasin, ex. "Continente Lumiar"' },
+    storeAddress: { type: 'string' },
+    date: { type: 'string', description: 'AAAA-MM-JJ, chaîne vide si illisible' },
+    currency: { type: 'string', description: 'Code ISO, ex. EUR' },
+    total: nullable('number'),
+    lines: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          label: { type: 'string' },
+          count: { type: 'number', description: "nombre d'unités achetées (1 par défaut)" },
+          size: nullable('number'),
+          sizeUnit: { type: 'string', enum: ['kg', 'g', 'l', 'cl', 'ml', 'pc', 'none'] },
+          weightKg: nullable('number'),
+          unitPrice: nullable('number'),
+          totalPrice: { type: 'number' },
+        },
+        required: ['label', 'count', 'size', 'sizeUnit', 'weightKg', 'unitPrice', 'totalPrice'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['found', 'storeName', 'storeAddress', 'date', 'currency', 'total', 'lines'],
+  additionalProperties: false,
+};
+
+const RECEIPT_PROMPT = `Ces images montrent un ticket de caisse de supermarché (France ou Portugal), éventuellement en plusieurs morceaux dans l'ordre.
+Transcris chaque article acheté :
+- label : le libellé tel qu'imprimé (abréviations comprises).
+- count : nombre d'unités (ex. "2 x 1,49" → 2), 1 par défaut.
+- size + sizeUnit : la contenance d'UNE unité si elle figure dans le libellé (ex. "LEITE MG 1L" → 1 et "l" ; "YAOURT 4X125G" → 500 et "g") ; sinon null et "none".
+- weightKg : pour un article pesé, le poids en kg (ex. "0,532 kg x 7,99 €/kg" → 0.532) ; sinon null.
+- unitPrice : prix unitaire ou prix au kg imprimé, sinon null.
+- totalPrice : montant payé pour la ligne, APRÈS les remises qui s'y rapportent (une ligne "remise", "desconto", "poupança" se déduit de l'article concerné et n'est pas une ligne à part).
+Ignore les lignes de paiement, TVA/IVA, fidélité, rendu de monnaie et sous-totaux.
+storeName : enseigne + nom du magasin ; date au format AAAA-MM-JJ ; total : total payé.
+N'invente rien : si une valeur est illisible, mets null. Si l'image n'est pas un ticket de caisse, found = false et lines vide.`;
+
+export async function receiptFromPhotos(images, apiKey) {
+  const r = await readPhotosWithClaude(images, RECEIPT_PROMPT, RECEIPT_SCHEMA, apiKey, 'Ticket');
+  if (!r.data) return r;
+  if (!r.data.found || !r.data.lines?.length) return { status: 422, body: { error: 'Aucun ticket de caisse lisible sur la photo.' } };
+  return { status: 200, body: { receipt: r.data } };
 }
 
 // ---------- Magasins autour d'une position (Google Places API "New") ----------

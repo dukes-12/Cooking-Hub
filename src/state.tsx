@@ -1,7 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { SEED_RECIPES } from './data/recipes';
 import { getIngredient } from './data/ingredients';
-import type { AppState, FridgeItem, PlannedMeal, Profile, Recipe, ShoppingItem } from './types';
+import type { AppState, ChosenStore, FridgeItem, PlannedMeal, Profile, Receipt, Recipe, ShoppingItem } from './types';
+import { observationsFromReceipts } from './lib/receipts';
+import { setObservedPrices } from './lib/pricing';
+import { storeKey } from './lib/stores';
 import { buildShoppingList, sortByAisle } from './lib/shopping';
 
 const KEY = 'cooking-hub:v1';
@@ -32,6 +35,7 @@ const INITIAL: AppState = {
   menu: [],
   shopping: [],
   imported: [],
+  receipts: [],
 };
 
 function load(): AppState {
@@ -69,6 +73,13 @@ function useStore() {
     () => Object.fromEntries([...SEED_RECIPES, ...catalog, ...state.imported].map((r) => [r.id, r])),
     [catalog, state.imported],
   );
+
+  // Les prix relevés sur les tickets alimentent le calcul des prix avant l'affichage des écrans.
+  const observations = useMemo(() => {
+    const list = observationsFromReceipts(state.receipts);
+    setObservedPrices(list);
+    return list;
+  }, [state.receipts]);
 
   const patch = useCallback((fn: (s: AppState) => Partial<AppState>) => setState((s) => ({ ...s, ...fn(s) })), []);
 
@@ -134,6 +145,31 @@ function useStore() {
           return { fridge, shopping: s.shopping.filter((i) => !i.checked) };
         }),
 
+      addStore: (store: ChosenStore) =>
+        patch((s) => ({
+          profile: { ...s.profile, stores: [...s.profile.stores.filter((x) => storeKey(x) !== storeKey(store)), store] },
+        })),
+      removeStore: (key: string) =>
+        patch((s) => ({ profile: { ...s.profile, stores: s.profile.stores.filter((x) => storeKey(x) !== key) } })),
+      /** Ticket validé : enregistre les prix, crée le magasin si besoin et range les articles cochés au frigo. */
+      addReceipt: (receipt: Receipt, newStore: ChosenStore | undefined, toFridge: { ingredientId: string; qty: number }[]) =>
+        patch((s) => {
+          let fridge = s.fridge;
+          for (const { ingredientId, qty } of toFridge) {
+            if (!(qty > 0)) continue;
+            fridge = fridge.some((f) => f.ingredientId === ingredientId)
+              ? fridge.map((f) => (f.ingredientId === ingredientId ? { ...f, qty: f.qty + qty } : f))
+              : [{ ingredientId, qty, addedAt: Date.now() }, ...fridge];
+          }
+          const stores = newStore && !s.profile.stores.some((x) => storeKey(x) === storeKey(newStore)) ? [...s.profile.stores, newStore] : s.profile.stores;
+          return {
+            fridge,
+            profile: { ...s.profile, stores },
+            receipts: [receipt, ...s.receipts.filter((r) => r.id !== receipt.id)],
+          };
+        }),
+      deleteReceipt: (id: string) => patch((s) => ({ receipts: s.receipts.filter((r) => r.id !== id) })),
+
       saveImported: (r: Recipe) => patch((s) => ({ imported: [r, ...s.imported.filter((x) => x.id !== r.id)] })),
       deleteImported: (id: string) =>
         patch((s) => ({
@@ -145,7 +181,7 @@ function useStore() {
     [patch, recipes],
   );
 
-  return { state, recipes, actions };
+  return { state, recipes, actions, observations };
 }
 
 function consume(fridge: FridgeItem[], used: { ingredientId: string; qty: number }[]): FridgeItem[] {

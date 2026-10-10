@@ -33,11 +33,14 @@ Test local de l'environnement Cloudflare : `npm run preview:cf`. Déploiement ma
 |---|---|
 | **Onboarding** | Foyer, pays des courses (prix) et cuisines souhaitées (indépendantes du pays : FR, PT, IT…), magasins (géolocalisation via OpenStreetMap ou choix manuel), régime, allergies, interdits, aliments aimés / détestés, équipement, rythme (express → mijoté), budget/portion, objectif calorique. |
 | **Découvrir** | Pile de cartes à swiper : → favori, ← passer, ↑ ajouter au menu. Classées par score de compatibilité (goûts, temps, budget, frigo, calories). |
-| **Recherche** | Texte + filtres (type de plat, cuisine, temps, prix/portion, calories, « avec ce que j'ai »), tri par pertinence / prix / temps / calories. |
+| **Recherche** (🔍 depuis Découvrir) | Texte + filtres (type de plat, cuisine, temps, prix/portion, calories, « avec ce que j'ai »), tri par pertinence / prix / temps / calories. |
 | **Fiche recette** | Format uniformisé : temps, kcal, coût/portion, difficulté, ingrédients mis à l'échelle, état frigo de chaque ingrédient, remplacements (⇄), comparatif de prix par enseigne, macros, étapes cochables, « J'ai cuisiné » (décompte le frigo). |
 | **Recettes** | Menu de la semaine (portions, coût total), favoris, recettes importées. |
 | **Frigo** | Inventaire par rayon + suggestions « à cuisiner avec ce que tu as ». |
 | **Courses** | Liste générée depuis le menu, moins le frigo et le placard, triée par rayon ; meilleure enseigne, économie possible en partageant entre 2 enseignes ; **mode magasin** plein écran (gros boutons, écran maintenu allumé, hors-ligne) ; les articles achetés vont dans le frigo. |
+| **Magasins** | Tes magasins (ex. « Continente Lumiar ») avec le coût d'un panier type et les prix relevés ; **carte** (OpenStreetMap) des supermarchés autour de toi ou d'une ville, ajout en un geste ; **comparatif** des magasins sur le panier type. Fiche magasin : prix moyens relevés, tickets, itinéraire Google Maps. |
+| **Ticket de caisse** | Photo du ticket (jusqu'à 4 photos, lue par Claude) ou saisie à la main → récapitulatif à vérifier : magasin, date, chaque ligne associée à un produit de l'appli, quantité / format / poids / prix (prix au kilo recalculé), écart avec le total imprimé. Tout est modifiable avant validation. Les prix s'ajoutent au magasin et les articles cochés vont au frigo. |
+| **Fiche produit** | Une fiche par famille de produit (« blanc de poulet » regroupe tous les grammages) : photo (Wikimedia Commons, via Wikidata), noms FR/PT/EN, résumé, valeurs pour 100 g, prix dans tes magasins (relevé dans ce magasin > relevé dans l'enseigne > estimation), prix ailleurs triables par pays ou par prix, historique d'achat, recettes qui l'utilisent. Accessible depuis le frigo, les recettes et les magasins. |
 | **Import** | Coller un lien (Marmiton, 750g, Jow, Ricardo, AllRecipes, receitas Continente / Pingo Doce…), **prendre en photo** une recette (livre, fiche manuscrite, capture — jusqu'à 4 pages, lue par Claude) ou coller un texte : la recette est convertie au format Cooking Hub. |
 
 ### Comment les recettes sont adaptées (`src/lib/adapt.ts`)
@@ -47,7 +50,7 @@ Test local de l'environnement Cloudflare : `npm run preview:cf`. Déploiement ma
 - **Frigo** : chaque ingrédient est marqué « au frigo / en partie / placard / à acheter », avec proposition d'utiliser un substitut déjà présent.
 
 ### Prix (`src/lib/pricing.ts`)
-Prix de référence par ingrédient (France) × indice pays × indice de l'enseigne (+ biais par rayon). C'est une **estimation** : l'interface `PriceProvider` permet de brancher de vraies sources de prix.
+Prix de référence par ingrédient (France) × indice pays × indice de l'enseigne (+ biais par rayon). C'est une **estimation**, remplacée dès qu'un ticket validé donne le vrai prix : médiane des prix au kilo relevés sur 90 jours pour l'enseigne (`observedProvider`, prioritaire sur `estimatedProvider`).
 
 ### Nutrition
 Calculée à partir de la base d'ingrédients (valeurs pour 100 g, type Ciqual). Si la source importée donne les calories, elles sont utilisées en priorité. Un indice de fiabilité s'affiche quand des ingrédients ne sont pas reconnus.
@@ -86,7 +89,7 @@ Le script réutilise l'import schema.org, ignore les URLs déjà importées et a
 ## Architecture
 
 ```
-worker/         Cloudflare Worker : routes /api/* (import lien, import photo, santé)
+worker/         Cloudflare Worker : routes /api/* (import lien, import photo, ticket, magasins Google, santé)
 server/         core.mjs (logique partagée) + index.mjs (serveur local)
 scripts/        import en masse de recettes → public/catalog.json
 src/

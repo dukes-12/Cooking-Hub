@@ -48,10 +48,11 @@ export function Discover() {
   return (
     <div className="screen discover">
       <header className="screen-head">
-        <div>
+        <div className="grow">
           <p className="muted small">{state.profile.name ? `Salut ${state.profile.name} 👋` : 'Salut 👋'}</p>
           <h1>Qu’est-ce qu’on mange ?</h1>
         </div>
+        <button className="icon-btn" onClick={() => go('/search')} aria-label="Rechercher">🔍</button>
         <button className="avatar" onClick={() => go('/profile')} aria-label="Profil">
           {(state.profile.name || '🙂').slice(0, 1).toUpperCase()}
         </button>

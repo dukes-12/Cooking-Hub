@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { SEED_RECIPES } from '../src/data/recipes';
 import { adaptRecipe } from '../src/lib/adapt';
 import { fromSchemaRecipe, parseIngredientLine, parseISODuration } from '../src/lib/importer';
-import { quoteBasket } from '../src/lib/pricing';
+import { getIngredient } from '../src/data/ingredients';
+import { pricePerKg, priceSource, quoteBasket, setObservedPrices } from '../src/lib/pricing';
+import { draftFromApi, fridgeQuantity, linePricePerKg, lineQuantity, observationsFromReceipts, sizeFromLabel } from '../src/lib/receipts';
 import { buildShoppingList } from '../src/lib/shopping';
 import { DEFAULT_PROFILE } from '../src/state';
-import type { Profile } from '../src/types';
+import type { ChosenStore, Profile, Receipt, ReceiptLine } from '../src/types';
 // @ts-expect-error module JS du serveur
-import { extractRecipe } from '../server/core.mjs';
+import { extractRecipe, receiptFromPhotos } from '../server/core.mjs';
 
 const recipe = (id: string) => SEED_RECIPES.find((r) => r.id === id)!;
 const profile = (p: Partial<Profile> = {}): Profile => ({ ...DEFAULT_PROFILE, ...p });
@@ -181,5 +183,66 @@ describe('magasins Google Places', () => {
     expect((seen!.init.headers as Record<string, string>)['X-Goog-FieldMask']).not.toMatch(/rating|review|opening/);
     expect((await findStoresGoogle({ lat: '38.7', lon: '-9.1' }, undefined, fake)).status).toBe(501);
     expect((await findStoresGoogle({ lat: 'x', lon: '1' }, 'KEY', fake)).status).toBe(400);
+  });
+});
+
+describe('tickets de caisse', () => {
+  const line = (p: Partial<ReceiptLine>): ReceiptLine => ({ id: 'l', label: '', count: 1, size: null, sizeUnit: 'none', weightKg: null, totalPrice: 0, toFridge: true, ...p });
+
+  it('lit la taille du paquet dans le libellé', () => {
+    expect(sizeFromLabel('LEITE MG 1L')).toEqual({ size: 1, sizeUnit: 'l' });
+    expect(sizeFromLabel('YAOURT NATURE 4X125G')).toEqual({ size: 500, sizeUnit: 'g' });
+    expect(sizeFromLabel('FILETE FRANGO 0,5KG')).toEqual({ size: 0.5, sizeUnit: 'kg' });
+    expect(sizeFromLabel('BANANA')).toBeNull();
+  });
+
+  it('calcule quantité, prix au kilo et quantité à ranger au frigo', () => {
+    const poulet = getIngredient('poulet')!;
+    const pesee = line({ productId: 'poulet', weightKg: 0.62, totalPrice: 4.96 });
+    expect(lineQuantity(pesee, poulet).grams).toBeCloseTo(620);
+    expect(linePricePerKg(pesee, poulet)).toBeCloseTo(8);
+    expect(fridgeQuantity(pesee, poulet)).toBe(620);
+    const lait = getIngredient('lait')!;
+    const pack = line({ productId: 'lait', count: 6, size: 1, sizeUnit: 'l', totalPrice: 5.4 });
+    expect(fridgeQuantity(pack, lait)).toBe(6000);
+    expect(linePricePerKg(pack, lait)).toBeCloseTo(5.4 / 6.18, 2);
+  });
+
+  it('les prix relevés priment sur l’estimation pour l’enseigne', () => {
+    const estimate = pricePerKg('poulet', 'pt-continente', 'PT');
+    const receipt: Receipt = {
+      id: 'r1', storeKey: 'st-1', chainId: 'pt-continente', country: 'PT', date: new Date().toISOString().slice(0, 10), total: 4.96, createdAt: 0,
+      lines: [line({ productId: 'poulet', weightKg: 0.62, totalPrice: 4.96 }), line({ label: 'SACO', totalPrice: 0.1 })],
+    };
+    const obs = observationsFromReceipts([receipt]);
+    expect(obs).toHaveLength(1);
+    setObservedPrices(obs);
+    expect(pricePerKg('poulet', 'pt-continente', 'PT')).toBeCloseTo(8);
+    expect(priceSource('poulet', 'pt-continente')).toBe('observed');
+    expect(pricePerKg('poulet', 'pt-pingodoce', 'PT')).not.toBe(8);
+    setObservedPrices([]);
+    expect(pricePerKg('poulet', 'pt-continente', 'PT')).toBe(estimate);
+  });
+
+  it('rapproche le ticket d’un magasin enregistré ou en prépare un nouveau', () => {
+    const lumiar: ChosenStore = { id: 'st-lumiar', chainId: 'pt-continente', label: 'Continente Lumiar' };
+    const api = { storeName: 'CONTINENTE', storeAddress: 'Alameda das Linhas de Torres, Lumiar', date: '2026-10-02', total: 5.06, lines: [
+      { label: 'FILETE PEITO FRANGO', count: 1, size: null, sizeUnit: 'none' as const, weightKg: 0.62, unitPrice: null, totalPrice: 4.96 },
+      { label: 'SACO PLASTICO', count: 1, size: null, sizeUnit: 'none' as const, weightKg: null, unitPrice: null, totalPrice: 0.1 },
+    ] };
+    const d = draftFromApi(api, [lumiar, { id: 'st-colombo', chainId: 'pt-continente', label: 'Continente Colombo' }], 'PT');
+    expect(d.receipt.storeKey).toBe('st-lumiar');
+    expect(d.newStore).toBeUndefined();
+    expect(d.receipt.date).toBe('2026-10-02');
+    expect(d.receipt.lines[1].productId).toBeUndefined();
+    expect(d.receipt.lines[1].toFridge).toBe(false);
+    const other = draftFromApi({ ...api, storeName: 'Pingo Doce Alvalade', storeAddress: '' }, [lumiar], 'PT');
+    expect(other.newStore).toMatchObject({ chainId: 'pt-pingodoce', source: 'receipt' });
+    expect(other.receipt.storeKey).toBe(other.newStore!.id);
+  });
+
+  it('refuse la lecture de ticket sans clé API', async () => {
+    const res = await receiptFromPhotos([{ mediaType: 'image/jpeg', data: 'x' }], undefined);
+    expect(res.status).toBe(501);
   });
 });

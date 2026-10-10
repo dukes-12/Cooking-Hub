@@ -1,6 +1,6 @@
 // Point d'entrée Cloudflare Workers : les routes /api/* passent par ici,
 // tout le reste (l'app compilée dans dist/) est servi directement comme fichiers statiques.
-import { findStoresGoogle, importFromUrl, recipeFromPhotos } from '../server/core.mjs';
+import { findStoresGoogle, importFromUrl, receiptFromPhotos, recipeFromPhotos } from '../server/core.mjs';
 
 export default {
   async fetch(request, env) {
@@ -26,6 +26,16 @@ export default {
         return Response.json({ error: 'Requête invalide.' }, { status: 400 });
       }
       const { status, body } = await recipeFromPhotos(payload.images, env.ANTHROPIC_API_KEY);
+      return Response.json(body, { status });
+    }
+    if (url.pathname === '/api/receipt' && request.method === 'POST') {
+      let payload;
+      try {
+        payload = await request.json();
+      } catch {
+        return Response.json({ error: 'Requête invalide.' }, { status: 400 });
+      }
+      const { status, body } = await receiptFromPhotos(payload.images, env.ANTHROPIC_API_KEY);
       return Response.json(body, { status });
     }
     if (url.pathname.startsWith('/api/')) {

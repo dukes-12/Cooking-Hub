@@ -135,9 +135,44 @@ export type Allergen =
 export type Speed = 'express' | 'balanced' | 'slow';
 
 export interface ChosenStore {
+  /** Identifiant du magasin précis (absent pour une enseigne choisie sans adresse). */
+  id?: string;
   chainId: string;
-  label: string; // ex. "Lidl – Rue de la Paix"
+  label: string; // ex. "Continente Lumiar"
   distanceM?: number;
+  address?: string;
+  lat?: number;
+  lon?: number;
+  source?: 'osm' | 'google' | 'manual' | 'receipt';
+}
+
+export type SizeUnit = 'kg' | 'g' | 'l' | 'cl' | 'ml' | 'pc' | 'none';
+
+export interface ReceiptLine {
+  id: string;
+  /** Libellé imprimé sur le ticket. */
+  label: string;
+  /** Produit de l'app (ingrédient détaillé ou "lex:…"), absent si non associé. */
+  productId?: string;
+  count: number;
+  size: number | null;
+  sizeUnit: SizeUnit;
+  weightKg: number | null;
+  totalPrice: number;
+  /** Ajouter au frigo à la validation. */
+  toFridge: boolean;
+}
+
+export interface Receipt {
+  id: string;
+  /** Clé du magasin (storeKey). */
+  storeKey: string;
+  chainId: string;
+  country: string;
+  date: string; // AAAA-MM-JJ
+  total: number | null;
+  lines: ReceiptLine[];
+  createdAt: number;
 }
 
 export interface Profile {
@@ -194,4 +229,5 @@ export interface AppState {
   menu: PlannedMeal[];
   shopping: ShoppingItem[];
   imported: Recipe[];
+  receipts: Receipt[];
 }

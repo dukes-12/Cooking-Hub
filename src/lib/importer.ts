@@ -270,10 +270,10 @@ export async function importFromUrl(url: string): Promise<Recipe> {
 
 // ---------- Import depuis des photos ----------
 
-/** Réduit une photo (max 1600 px, JPEG) pour accélérer l'envoi et l'analyse. */
-async function shrink(file: File): Promise<{ mediaType: string; data: string }> {
+/** Réduit une photo (JPEG) pour accélérer l'envoi et l'analyse ; les tickets gardent plus de détail. */
+export async function shrinkPhoto(file: File, maxEdge = 1600): Promise<{ mediaType: string; data: string }> {
   const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+  const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(bitmap.width * scale);
   canvas.height = Math.round(bitmap.height * scale);
@@ -284,7 +284,7 @@ async function shrink(file: File): Promise<{ mediaType: string; data: string }> 
 }
 
 export async function importFromPhotos(files: File[]): Promise<Recipe> {
-  const images = await Promise.all(files.slice(0, 4).map(shrink));
+  const images = await Promise.all(files.slice(0, 4).map((f) => shrinkPhoto(f)));
   const res = await fetch('/api/photo', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

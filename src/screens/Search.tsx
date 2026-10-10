@@ -3,7 +3,7 @@ import { RecipeRow, useMatches } from '../components/RecipeCard';
 import { Chip, ChipGroup, Empty, Sheet } from '../components/ui';
 import { CATEGORY_LABELS, CUISINES, getCountry } from '../data/reference';
 import { normalize } from '../lib/text';
-import { go } from '../router';
+import { back, go } from '../router';
 import { useApp } from '../state';
 import type { Category } from '../types';
 
@@ -61,7 +61,8 @@ export function Search() {
   return (
     <div className="screen">
       <header className="screen-head">
-        <h1>Rechercher</h1>
+        <button className="icon-btn" onClick={() => back('/discover')} aria-label="Retour">←</button>
+        <h1 className="grow">Rechercher</h1>
         <button className="btn btn-soft btn-sm" onClick={() => go('/import')}>＋ Importer</button>
       </header>
       <div className="search-bar">

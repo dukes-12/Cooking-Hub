@@ -9,6 +9,8 @@ const LANGS: Lang[] = ['fr', 'pt', 'en'];
 
 let entries: LexEntry[] = [];
 const byId = new Map<string, LexEntry>();
+/** id de notre ingrédient détaillé → son entrée du dictionnaire */
+const byOwn = new Map<string, LexEntry>();
 /** nom normalisé → entrées ; les noms français passent avant les portugais, puis anglais. */
 const byName = new Map<string, LexEntry[]>();
 let ready = false;
@@ -20,7 +22,11 @@ export function setLexicon(list: LexEntry[]) {
   entries = list;
   byId.clear();
   byName.clear();
-  for (const e of list) byId.set(e.id, e);
+  byOwn.clear();
+  for (const e of list) {
+    byId.set(e.id, e);
+    if (e.o) byOwn.set(e.o, e);
+  }
   for (const lang of LANGS) {
     for (const e of list) {
       for (const name of e[lang]) {
@@ -62,6 +68,11 @@ export function useLexiconReady(): boolean {
     (cb) => (listeners.add(cb), () => listeners.delete(cb)),
     () => ready,
   );
+}
+
+/** Entrée du dictionnaire d'un produit de l'app ("poulet" ou "lex:artichoke"). */
+export function entryForProduct(id: string): LexEntry | undefined {
+  return id.startsWith('lex:') ? byId.get(id.slice(4)) : byOwn.get(id);
 }
 
 export function lexiconSize(): number {

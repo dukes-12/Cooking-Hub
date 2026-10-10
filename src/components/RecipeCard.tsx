@@ -10,7 +10,7 @@ export function useMatches(): Match[] {
   const { state, recipes } = useApp();
   return useMemo(
     () => Object.values(recipes).map((r) => scoreRecipe(adaptRecipe(r, state.profile, state.fridge), state.profile)),
-    [recipes, state.profile, state.fridge],
+    [recipes, state.profile, state.fridge, state.receipts],
   );
 }
 

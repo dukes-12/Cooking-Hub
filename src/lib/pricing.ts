@@ -1,6 +1,7 @@
 import { getIngredient } from '../data/ingredients';
 import { CHAINS, getChain, getCountry, type Chain } from '../data/reference';
 import type { Profile } from '../types';
+import { median, type PriceObservation } from './receipts';
 import { hash01 } from './text';
 
 /**
@@ -32,7 +33,35 @@ export const estimatedProvider: PriceProvider = {
   },
 };
 
-const providers: PriceProvider[] = [estimatedProvider];
+/**
+ * Prix relevés sur les tickets de caisse validés (médiane des 90 derniers jours par enseigne).
+ * Alimenté par l'état de l'app via setObservedPrices.
+ */
+let observed = new Map<string, number>(); // "chainId|productId" → prix au kg
+export function setObservedPrices(list: PriceObservation[]) {
+  const recent = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
+  const buckets = new Map<string, number[]>();
+  for (const o of list) {
+    if (o.pricePerKg == null || o.date < recent) continue;
+    const k = `${o.chainId}|${o.productId}`;
+    buckets.set(k, [...(buckets.get(k) ?? []), o.pricePerKg]);
+  }
+  observed = new Map([...buckets].map(([k, v]) => [k, median(v)!]));
+}
+
+export const observedProvider: PriceProvider = {
+  id: 'observed',
+  label: 'Prix relevés sur tes tickets',
+  pricePerKg: (ingredientId, chainId) => (chainId ? observed.get(`${chainId}|${ingredientId}`) ?? null : null),
+};
+
+/** D'où vient le prix affiché : relevé sur un ticket ou estimé. */
+export function priceSource(ingredientId: string, chainId: string | null): 'observed' | 'estimate' | null {
+  if (chainId && observed.has(`${chainId}|${ingredientId}`)) return 'observed';
+  return estimatedProvider.pricePerKg(ingredientId, chainId, 'FR') != null ? 'estimate' : null;
+}
+
+const providers: PriceProvider[] = [observedProvider, estimatedProvider];
 
 export function pricePerKg(ingredientId: string, chainId: string | null, country: string): number | null {
   for (const p of providers) {
@@ -71,7 +100,8 @@ export interface BasketQuote {
 
 export function quoteBasket(items: Basket[], profile: Profile): BasketQuote {
   const chains = userChains(profile);
-  const known = items.filter((it) => it.ingredientId && it.grams != null && getIngredient(it.ingredientId) && !getIngredient(it.ingredientId)!.partial);
+  const priced = (id: string) => chains.some((c) => pricePerKg(id, c.id, profile.country) != null);
+  const known = items.filter((it) => it.ingredientId && it.grams != null && getIngredient(it.ingredientId) && priced(it.ingredientId));
   const unknown = items.length - known.length;
   const matrix = known.map((it) => chains.map((c) => costOf(it.ingredientId, it.grams, c.id, profile.country) ?? 0));
   const perChain = chains

@@ -107,7 +107,7 @@ export function RecipeView({ recipe, preview, onSave }: { recipe: Recipe; previe
               <span className="ing-dot" title={fridgeLabel(l)} />
               <span className="ing-qty">{l.ingredient && l.original.unit === 'pc' && l.qty != null ? fmtBase(Math.round(l.qty * 10) / 10, 'pc') : fmtQty(l.qty, l.original.unit)}</span>
               <span className="ing-name">
-                {l.ingredient?.name ?? l.original.name}
+                {l.ingredient ? <button className="link-plain" onClick={() => go(`/product/${encodeURIComponent(l.ingredient!.id)}`)}>{l.ingredient.name}</button> : l.original.name}
                 {l.original.optional && <span className="muted small"> (facultatif)</span>}
                 {l.swappedFrom && <span className="muted small"> · au lieu de {l.swappedFrom.name}</span>}
                 {!l.ingredient && <span className="muted small"> · non reconnu</span>}

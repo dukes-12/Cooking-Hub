@@ -1,3 +1,4 @@
+import { go } from '../router';
 import { useMemo, useState } from 'react';
 import { RecipeRow, useMatches } from '../components/RecipeCard';
 import { Chip, Empty, IngredientPicker, Section, Sheet } from '../components/ui';
@@ -82,7 +83,7 @@ export function Fridge() {
                 return (
                   <div key={f.ingredientId} className="fridge-item">
                     <div className="grow">
-                      <b>{ing.name}</b>
+                      <button className="link-plain" onClick={() => go(`/product/${encodeURIComponent(ing.id)}`)}><b>{ing.name}</b></button>
                       <span className="small muted block">{days === 0 ? 'ajouté aujourd’hui' : `il y a ${days} j`}</span>
                     </div>
                     <div className="stepper">
