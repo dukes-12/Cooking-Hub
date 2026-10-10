@@ -16,21 +16,16 @@ Production : `npm run build && npm start` → tout est servi sur http://localhos
 
 Tests : `npm test` · Vérification des types : `npm run typecheck`.
 
-## Mise en ligne sur Cloudflare Pages (une URL de test à chaque push)
+## Mise en ligne sur Cloudflare Workers (une URL de test à chaque push)
 
-Configuration unique, dans le tableau de bord Cloudflare :
+Le projet se déploie en **Worker avec fichiers statiques** (`wrangler.jsonc`) : `dist/` est servi en statique, et `worker/index.js` répond aux routes `/api/*` (import lien, import photo, santé).
 
-1. **Workers & Pages → Create → Pages → Connect to Git** → choisis `dukes-12/cooking-hub`.
-2. Réglages de build : *Framework preset* `None`, **Build command** `npm run build`, **Build output directory** `dist`.
-3. **Settings → Variables and Secrets** : ajoute le secret `ANTHROPIC_API_KEY` (pour l'import par photo), en *Production* et en *Preview*.
-4. Lance le premier déploiement.
+Configuration unique, dans le tableau de bord Cloudflare : **Workers & Pages → Create → Import a repository** → `dukes-12/cooking-hub`
+- Commande de build : `npm run build` · Commande de déploiement : `npx wrangler deploy` · Commande d'aperçu : `npx wrangler preview`
+- Builds d'aperçu activés : chaque branche / PR obtient sa propre URL de test.
+- Après la création : **Settings → Variables and Secrets** → ajouter le secret `ANTHROPIC_API_KEY` (import par photo).
 
-Ensuite, chaque push déploie automatiquement :
-- la branche `main` → `https://cooking-hub.pages.dev` (production) ;
-- toute autre branche / PR → une URL de prévisualisation `https://<branche>.cooking-hub.pages.dev`, commentée sur la PR. C'est l'URL à ouvrir sur ton téléphone pour tester chaque lot.
-
-Le dossier `functions/` est déployé automatiquement en Pages Functions (`/api/import`, `/api/photo`, `/api/health`).
-Déploiement manuel possible : `npx wrangler login` puis `npm run deploy`. Test local de l'environnement Cloudflare : `npm run build && npx wrangler pages dev`.
+Test local de l'environnement Cloudflare : `npm run preview:cf`. Déploiement manuel : `npx wrangler login` puis `npm run deploy`.
 
 ## Ce que fait l'app
 
@@ -76,7 +71,7 @@ Le script réutilise l'import schema.org, ignore les URLs déjà importées et a
 ## Architecture
 
 ```
-functions/api/  Cloudflare Pages Functions (import lien, import photo, santé)
+worker/         Cloudflare Worker : routes /api/* (import lien, import photo, santé)
 server/         core.mjs (logique partagée) + index.mjs (serveur local)
 scripts/        import en masse de recettes → public/catalog.json
 src/

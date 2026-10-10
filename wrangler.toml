@@ -1,5 +1,0 @@
-# Configuration Cloudflare Pages (utilisée par `wrangler pages dev/deploy` et la build Git).
-name = "cooking-hub"
-pages_build_output_dir = "dist"
-compatibility_date = "2026-09-01"
-compatibility_flags = ["nodejs_compat"]

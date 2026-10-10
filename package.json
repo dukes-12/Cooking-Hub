@@ -11,7 +11,8 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "recipes:import": "tsx scripts/import-recipes.ts",
-    "deploy": "npm run build && wrangler pages deploy"
+    "deploy": "npm run build && wrangler deploy",
+    "preview:cf": "npm run build && wrangler dev"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",

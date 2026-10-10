@@ -1,5 +1,5 @@
 // Logique serveur partagée entre le serveur Node local (server/index.mjs)
-// et les Cloudflare Pages Functions (functions/api/*.js).
+// et les Cloudflare Worker (worker/index.js).
 import Anthropic from '@anthropic-ai/sdk';
 
 // ---------- Import depuis une URL (schema.org Recipe en JSON-LD) ----------

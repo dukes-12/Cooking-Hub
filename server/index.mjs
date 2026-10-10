@@ -1,4 +1,4 @@
-// Serveur Cooking Hub pour le développement local (en ligne, ce sont les Cloudflare Pages Functions de functions/).
+// Serveur Cooking Hub pour le développement local (en ligne, ce sont les Cloudflare Worker de worker/index.js).
 //  - GET  /api/import?url=…  : extrait le bloc schema.org "Recipe" (JSON-LD) d'une page de recette.
 //  - POST /api/photo         : lit une recette sur 1 à 4 photos (Claude). Nécessite ANTHROPIC_API_KEY.
 //  - Sert aussi l'app compilée (dist/) après `npm run build`.

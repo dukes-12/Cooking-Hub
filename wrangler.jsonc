@@ -1,0 +1,14 @@
+// Configuration Cloudflare Workers (build Git : `npm run build` puis `npx wrangler deploy`).
+{
+  "name": "cooking-hub",
+  "main": "./worker/index.js",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    // Seules les routes d'API réveillent le Worker ; le reste est servi en statique.
+    "run_worker_first": ["/api/*"]
+  },
+  "observability": { "enabled": true }
+}
