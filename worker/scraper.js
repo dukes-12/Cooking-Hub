@@ -11,14 +11,14 @@ import { INGREDIENT_BY_ID } from '../src/data/ingredients';
 import { CATALOG } from './scraper-catalog.js';
 
 export const CHAINS = [
-  { id: 'pt-continente', index: 'https://www.continente.pt/sitemap_index.xml', brand: 'continente' },
   { id: 'pt-pingodoce', index: 'https://www.pingodoce.pt/home/sitemap_index.xml', brand: 'pingo-doce' },
   { id: 'pt-auchan', index: 'https://www.auchan.pt/sitemap_index.xml', brand: 'auchan' },
+  { id: 'pt-continente', index: 'https://www.continente.pt/sitemap_index.xml', brand: 'continente' },
 ];
 const UA = 'CookingHubBot/1.0 (+https://cooking-hub.kronogame.workers.dev; relevé de prix hebdomadaire, quelques pages par heure)';
 const PER_INGREDIENT = 4; // produits suivis par ingrédient et par enseigne
 const PAGES_PER_RUN = 12;
-const URLS_PER_RUN = 3000; // adresses de sitemap traitées par passage (les gros sitemaps sont lus en plusieurs fois)
+const URLS_PER_RUN = 1000; // adresses de sitemap traitées par passage (les gros sitemaps sont lus en plusieurs fois)
 const REDISCOVER_DAYS = 28;
 const PT_FACTOR = 0.9; // indice de prix du Portugal (src/data/reference.ts)
 // Sections non alimentaires des sites (on les ignore même si un mot correspond).
@@ -29,30 +29,36 @@ const NON_FOOD = /\/(beleza|higiene|limpeza|casa|bebe|animais|bricolage|jardim|e
 /** Mots de l'adresse d'une page produit, entre tirets : "-arroz-agulha-cigala-1kg-". */
 export function slugOf(url) {
   // Auchan met l'identifiant en dernier (".../arroz-agulha-cigala-1kg/40299.html") : on prend alors le segment d'avant.
-  const parts = url.split('?')[0].replace(/\.html$/, '').split('/').filter(Boolean);
-  const raw = (/^\d+$/.test(parts.at(-1) ?? '') ? parts.at(-2) : parts.at(-1)) ?? '';
-  let last = raw;
-  try {
-    last = decodeURIComponent(raw);
-  } catch {
-    // adresse mal encodée : on garde le texte brut
+  const parts = url.split('?')[0].replace(/\.html$/, '').split('/');
+  let raw = parts.pop() ?? '';
+  if (/^\d*$/.test(raw)) raw = parts.pop() ?? '';
+  if (raw.includes('%')) {
+    try {
+      raw = decodeURIComponent(raw);
+    } catch {
+      // adresse mal encodée : on garde le texte brut
+    }
   }
-  return `-${last.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-')}-`;
+  raw = raw.toLowerCase();
+  // La normalisation Unicode (accents) est coûteuse : seulement si nécessaire.
+  if (/[^\x00-\x7f]/.test(raw)) raw = raw.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return `-${raw.replace(/[^a-z0-9]+/g, '-')}-`;
 }
 
 // Filtre rapide (une seule expression) avant la vérification détaillée : les sitemaps comptent des dizaines de milliers d'adresses.
 const ANY_RE = new RegExp(`-(?:${[...new Set(CATALOG.flatMap((e) => e.any))].map((a) => a.replace(/[-]/g, '\\-')).join('|')})-`);
 
-// Pré-filtre encore plus léger, sur l'adresse brute (sans normalisation).
-const RAW_RE = new RegExp(`[/-](?:${[...new Set(CATALOG.flatMap((e) => e.any))].join('|')})[-/.]`, 'i');
+// Motifs entourés de tirets, préparés une fois pour toutes (la découverte teste des dizaines de milliers d'adresses).
+const PATTERNS = CATALOG.map((e) => ({ id: e.id, any: e.any.map((a) => `-${a}-`), not: e.not.map((w) => `-${w}-`) }));
 
-/** Ingrédients du catalogue auxquels correspond une page produit. */
+/** Ingrédients du catalogue auxquels correspond une page produit (seul le nom du produit, en fin d'adresse, compte). */
 export function matchUrl(url) {
-  if (!RAW_RE.test(url) && !url.includes('%')) return [];
-  if (NON_FOOD.test(url)) return [];
-  if (!ANY_RE.test(slugOf(url))) return [];
   const s = slugOf(url);
-  return CATALOG.filter((e) => e.any.some((a) => s.includes(`-${a}-`)) && !e.not.some((w) => s.includes(`-${w}-`))).map((e) => e.id);
+  if (!ANY_RE.test(s)) return [];
+  if (NON_FOOD.test(url)) return [];
+  const out = [];
+  for (const e of PATTERNS) if (e.any.some((a) => s.includes(a)) && !e.not.some((w) => s.includes(w))) out.push(e.id);
+  return out;
 }
 
 /** Garde les meilleurs candidats : marque de l'enseigne d'abord, puis les noms les plus simples (produits de base). */
@@ -177,9 +183,44 @@ async function fetchText(url) {
 
 const getJson = async (kv, key, fallback) => (await kv.get(key, 'json')) ?? fallback;
 
+/** Diagnostic (clé KV "scrape:diag" = liste d'adresses) : statut, durée et taille reçue selon le User-Agent. */
+async function diagnose(kv, urls) {
+  const out = [];
+  for (const url of urls) {
+    for (const [name, ua] of [['bot', UA], ['navigateur', 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36']]) {
+      const t0 = Date.now();
+      try {
+        const res = await fetch(url, { headers: { 'User-Agent': ua }, signal: AbortSignal.timeout(30000) });
+        const reader = res.body.getReader();
+        let bytes = 0;
+        while (bytes < 2_000_000) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          bytes += value.length;
+        }
+        await reader.cancel().catch(() => undefined);
+        out.push({ url, ua: name, status: res.status, bytes, ms: Date.now() - t0 });
+        if (name === 'bot' && /sitemap/.test(url)) {
+          const sample = await fetch(url, { headers: { 'User-Agent': ua } }).then((r) => r.text());
+          await kv.put(`scrape:sample:${new URL(url).hostname}`, sample.slice(0, 400000));
+        }
+      } catch (e) {
+        out.push({ url, ua: name, error: String(e), ms: Date.now() - t0 });
+      }
+    }
+  }
+  await kv.put('scrape:diag-result', JSON.stringify(out));
+}
+
 /** Un passage : avance d'une étape (un sitemap, ou quelques pages produit, ou la synthèse). */
 export async function runScraper(env, now = new Date()) {
   const kv = env.PRICES;
+  const diag = await kv.get('scrape:diag', 'json');
+  if (diag) {
+    await kv.delete('scrape:diag');
+    await diagnose(kv, diag);
+    return 'diagnostic enregistré';
+  }
   const week = isoWeek(now);
   const state = await getJson(kv, 'scrape:state', { week: null, phase: 'idle' });
   const tracked = await getJson(kv, 'scrape:tracked', { at: 0, chains: {} });
