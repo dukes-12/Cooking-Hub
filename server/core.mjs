@@ -301,3 +301,116 @@ export async function geocodeGoogle({ q, country }, apiKey, fetchImpl = fetch) {
 export function publicConfig(env) {
   return { mapsKey: env.GOOGLE_MAPS_BROWSER_KEY || null, mapId: env.GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID' };
 }
+
+// ---------- Open Food Facts / Open Prices (données ouvertes, licence ODbL) ----------
+
+/** Open Food Facts demande un User-Agent qui identifie l'appli et donne un contact (secret OFF_CONTACT). */
+export function offUserAgent(env) {
+  return `CookingHub/1.0 (${env.OFF_CONTACT || 'https://cooking-hub.kronogame.workers.dev'})`;
+}
+
+const OFF_COUNTRY = { FR: 'en:france', BE: 'en:belgium', CH: 'en:switzerland', LU: 'en:luxembourg', CA: 'en:canada', PT: 'en:portugal', ES: 'en:spain', DE: 'en:germany', IT: 'en:italy' };
+const TAG_RE = /^[a-z]{2}:[a-z0-9-]{1,120}$/;
+const CODE_RE = /^\d{6,14}$/;
+
+async function getJson(url, ua, fetchImpl) {
+  const res = await fetchImpl(url, { headers: { 'User-Agent': ua, Accept: 'application/json' }, signal: AbortSignal.timeout(12000) });
+  if (!res.ok) throw Object.assign(new Error(`Service indisponible (${res.status})`), { status: res.status });
+  return res.json();
+}
+
+/** Prix au kilo (ou au litre) d'un relevé Open Prices, quand on peut le calculer. */
+export function openPricePerKg(p) {
+  const price = Number(p.price);
+  if (!(price > 0)) return null;
+  if (p.price_per === 'KILOGRAM') return price;
+  const q = Number(p.product?.product_quantity);
+  const unit = String(p.product?.product_quantity_unit ?? 'g').toLowerCase();
+  if (q > 0 && (unit === 'g' || unit === 'ml')) return price / (q / 1000);
+  return null;
+}
+
+/**
+ * Relevés de prix récents d'Open Prices pour une catégorie (produits sans code-barres) ou un code-barres,
+ * limités au pays demandé. On renvoie une version compacte : l'appli calcule les médianes par enseigne.
+ */
+export async function openPrices({ cat, code, country, currency }, ua, fetchImpl = fetch) {
+  if (!(cat && TAG_RE.test(cat)) && !(code && CODE_RE.test(code))) return { status: 400, body: { error: 'Catégorie ou code-barres invalide.' } };
+  const cc = /^[A-Z]{2}$/.test(country ?? '') ? country : null;
+  const since = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);
+  const base = { order_by: '-date', size: '100', date__gte: since };
+  if (/^[A-Z]{3}$/.test(currency ?? '')) base.currency = currency;
+  // Produits sans code-barres : category_tag ; produits emballés : catégories de leur fiche Open Food Facts.
+  const queries = code && CODE_RE.test(code) ? [{ ...base, product_code: code }] : [{ ...base, category_tag: cat }, { ...base, product__categories_tags__contains: cat }];
+  try {
+    const pages = await Promise.all(queries.map((q) => getJson(`https://prices.openfoodfacts.org/api/v1/prices?${new URLSearchParams(q)}`, ua, fetchImpl)));
+    const data = { items: pages.flatMap((pg) => pg.items ?? []), total: pages.reduce((n, pg) => n + (pg.total ?? 0), 0) };
+    const items = (data.items ?? [])
+      .filter((p) => !cc || p.location?.osm_address_country_code?.toUpperCase() === cc)
+      .map((p) => ({
+        perKg: openPricePerKg(p),
+        unit: p.price_per === 'UNIT' || !p.price_per ? Number(p.price) : null,
+        currency: p.currency,
+        date: p.date,
+        brand: p.location?.osm_brand || p.location?.osm_name || '',
+        city: p.location?.osm_address_city || '',
+        lat: p.location?.osm_lat != null ? Number(p.location.osm_lat) : null,
+        lon: p.location?.osm_lon != null ? Number(p.location.osm_lon) : null,
+      }));
+    return { status: 200, body: { items, total: data.total ?? items.length, source: 'Open Prices (Open Food Facts), ODbL' } };
+  } catch (e) {
+    return { status: 502, body: { error: `Open Prices : ${e.message}` } };
+  }
+}
+
+function compactProduct(p) {
+  const n = p.nutriments ?? {};
+  const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
+  return {
+    code: p.code,
+    name: p.product_name || p.generic_name || '',
+    brands: p.brands || '',
+    quantity: p.quantity || '',
+    qty: num(p.product_quantity),
+    qtyUnit: p.product_quantity_unit || null,
+    image: p.image_front_small_url || p.image_front_url || null,
+    nutriscore: /^[a-e]$/.test(p.nutriscore_grade ?? '') ? p.nutriscore_grade : null,
+    categories: p.categories_tags ?? [],
+    kcal: num(n['energy-kcal_100g']),
+    protein: num(n.proteins_100g),
+    carbs: num(n.carbohydrates_100g),
+    fat: num(n.fat_100g),
+  };
+}
+const OFF_FIELDS = 'code,product_name,generic_name,brands,quantity,product_quantity,product_quantity_unit,image_front_small_url,image_front_url,nutriscore_grade,categories_tags,nutriments';
+
+/** Fiche Open Food Facts d'un produit emballé, par son code-barres. */
+export async function offProduct(code, ua, fetchImpl = fetch) {
+  if (!CODE_RE.test(code ?? '')) return { status: 400, body: { error: 'Code-barres invalide.' } };
+  try {
+    const data = await getJson(`https://world.openfoodfacts.org/api/v2/product/${code}?fields=${OFF_FIELDS}`, ua, fetchImpl);
+    if (!data.product) return { status: 404, body: { error: 'Produit inconnu d’Open Food Facts.' } };
+    return { status: 200, body: { product: compactProduct(data.product) } };
+  } catch (e) {
+    if (e.status === 404) return { status: 404, body: { error: 'Produit inconnu d’Open Food Facts.' } };
+    return { status: 502, body: { error: `Open Food Facts : ${e.message}` } };
+  }
+}
+
+/** Produits les plus scannés d'une catégorie (dans le pays si possible) : photos, Nutri-Score, valeurs moyennes. */
+export async function offCategory({ cat, country }, ua, fetchImpl = fetch) {
+  if (!TAG_RE.test(cat ?? '')) return { status: 400, body: { error: 'Catégorie invalide.' } };
+  const search = async (withCountry) => {
+    const q = new URLSearchParams({ categories_tags: cat, fields: OFF_FIELDS, sort_by: 'unique_scans_n', page_size: '12' });
+    if (withCountry) q.set('countries_tags', withCountry);
+    const data = await getJson(`https://world.openfoodfacts.org/api/v2/search?${q}`, ua, fetchImpl);
+    return (data.products ?? []).map(compactProduct).filter((p) => p.name);
+  };
+  try {
+    let products = OFF_COUNTRY[country] ? await search(OFF_COUNTRY[country]) : [];
+    if (products.length < 3) products = await search(null);
+    return { status: 200, body: { products, source: 'Open Food Facts, ODbL' } };
+  } catch (e) {
+    return { status: 502, body: { error: `Open Food Facts : ${e.message}` } };
+  }
+}

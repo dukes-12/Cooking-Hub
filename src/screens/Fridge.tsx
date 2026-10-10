@@ -1,5 +1,6 @@
 import { go } from '../router';
 import { useMemo, useState } from 'react';
+import { BarcodeSheet } from '../components/BarcodeSheet';
 import { RecipeRow, useMatches } from '../components/RecipeCard';
 import { Chip, Empty, IngredientPicker, Section, Sheet } from '../components/ui';
 import { AISLE_LABELS, getIngredient } from '../data/ingredients';
@@ -25,6 +26,7 @@ export function Fridge() {
   const matches = useMatches();
   const [adding, setAdding] = useState<Ingredient | null>(null);
   const [qty, setQty] = useState(0);
+  const [barcode, setBarcode] = useState(false);
 
   const cookNow = useMemo(
     () => matches.filter((m) => m.adapted.status !== 'incompatible' && m.adapted.fridgeCoverage >= 0.4).sort((a, b) => b.adapted.fridgeCoverage - a.adapted.fridgeCoverage || b.score - a.score).slice(0, 4),
@@ -53,7 +55,9 @@ export function Fridge() {
           <h1>Mon frigo</h1>
           <p className="small muted">{state.fridge.length} produit{state.fridge.length > 1 ? 's' : ''} · frigo, congélo et placard</p>
         </div>
+        <button className="btn btn-soft btn-sm" onClick={() => setBarcode(true)}>▥ Code-barres</button>
       </header>
+      <BarcodeSheet open={barcode} onClose={() => setBarcode(false)} onAdd={(id, q) => actions.addFridge(id, q)} onOpenProduct={(id) => go(`/product/${encodeURIComponent(id)}`)} />
 
       <IngredientPicker onPick={(ing) => ing && open(ing)} placeholder="Ajouter un produit (ex. courgette)…" />
       <div className="chips scroll-x">

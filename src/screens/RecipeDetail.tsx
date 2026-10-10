@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { loadCommunityPrices, useCommunityPrices } from '../lib/openprices';
 import { RecipeVisual, StatusBadge } from '../components/RecipeCard';
 import { Empty, Sheet, Stepper } from '../components/ui';
 import { EQUIPMENT } from '../data/reference';
@@ -34,7 +35,11 @@ export function RecipeView({ recipe, preview, onSave }: { recipe: Recipe; previe
   const [doneSteps, setDoneSteps] = useState<number[]>([]);
   const [cooked, setCooked] = useState(false);
 
-  const a = useMemo(() => adaptRecipe(recipe, profile, fridge, { servings, swaps }), [recipe, profile, fridge, servings, swaps]);
+  const community = useCommunityPrices();
+  useEffect(() => {
+    loadCommunityPrices(recipe.ingredients.map((i) => i.ingredientId).filter((x): x is string => !!x), profile.country);
+  }, [recipe, profile.country]);
+  const a = useMemo(() => adaptRecipe(recipe, profile, fridge, { servings, swaps }), [recipe, profile, fridge, servings, swaps, community]); // eslint-disable-line react-hooks/exhaustive-deps
   const fav = state.favorites.includes(recipe.id);
   const country = profile.country;
   const best = a.quote.best;

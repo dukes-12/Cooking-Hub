@@ -1,6 +1,7 @@
 import { getIngredient } from '../data/ingredients';
 import { CHAINS, getChain, getCountry, type Chain } from '../data/reference';
 import type { Profile } from '../types';
+import { communityPricePerKg } from './openprices';
 import { median, type PriceObservation } from './receipts';
 import { hash01 } from './text';
 
@@ -56,12 +57,20 @@ export const observedProvider: PriceProvider = {
 };
 
 /** D'où vient le prix affiché : relevé sur un ticket ou estimé. */
-export function priceSource(ingredientId: string, chainId: string | null): 'observed' | 'estimate' | null {
+export function priceSource(ingredientId: string, chainId: string | null, country = 'FR'): 'observed' | 'community' | 'estimate' | null {
   if (chainId && observed.has(`${chainId}|${ingredientId}`)) return 'observed';
-  return estimatedProvider.pricePerKg(ingredientId, chainId, 'FR') != null ? 'estimate' : null;
+  if (communityPricePerKg(ingredientId, chainId, country)) return 'community';
+  return estimatedProvider.pricePerKg(ingredientId, chainId, country) != null ? 'estimate' : null;
 }
 
-const providers: PriceProvider[] = [observedProvider, estimatedProvider];
+/** Prix relevés par la communauté Open Prices (médiane de l'enseigne, sinon du pays). */
+export const communityProvider: PriceProvider = {
+  id: 'community',
+  label: 'Open Prices (prix relevés par la communauté Open Food Facts)',
+  pricePerKg: (ingredientId, chainId, country) => communityPricePerKg(ingredientId, chainId, country)?.value ?? null,
+};
+
+const providers: PriceProvider[] = [observedProvider, communityProvider, estimatedProvider];
 
 export function pricePerKg(ingredientId: string, chainId: string | null, country: string): number | null {
   for (const p of providers) {

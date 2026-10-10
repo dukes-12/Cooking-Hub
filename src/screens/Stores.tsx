@@ -1,3 +1,4 @@
+import { useCommunityPrices } from '../lib/openprices';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StoreMap, type MapPoint } from '../components/StoreMap';
 import { Empty } from '../components/ui';
@@ -18,6 +19,7 @@ export function basketTotal(chainId: string, country: string): number {
 }
 
 export function Stores() {
+  useCommunityPrices(); // le panier type se met à jour quand les prix Open Prices arrivent
   const { state } = useApp();
   const [tab, setTab] = useState<Tab>(state.profile.stores.length ? 'mine' : 'map');
   return (

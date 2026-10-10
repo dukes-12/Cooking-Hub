@@ -12,7 +12,10 @@ import { Shopping, ShopMode } from './screens/Shopping';
 import { StoreDetail } from './screens/StoreDetail';
 import { Stores } from './screens/Stores';
 import { go, useRoute } from './router';
+import { useEffect } from 'react';
 import { useLexiconReady } from './lib/lexicon';
+import { loadCommunityPrices } from './lib/openprices';
+import { REFERENCE_BASKET } from './lib/stores';
 import { useApp } from './state';
 
 const TABS = [
@@ -24,8 +27,19 @@ const TABS = [
 ];
 
 export function App() {
-  const { state } = useApp();
-  useLexiconReady(); // réaffiche les écrans quand le dictionnaire multilingue est chargé
+  const { state, recipes } = useApp();
+  const lexReady = useLexiconReady(); // réaffiche les écrans quand le dictionnaire multilingue est chargé
+
+  // Prix de la communauté (Open Prices) pour le panier type, le menu et la liste de courses, en arrière-plan.
+  useEffect(() => {
+    if (!state.onboarded || !lexReady) return;
+    const ids = [
+      ...REFERENCE_BASKET.map((b) => b.id),
+      ...state.menu.flatMap((m) => recipes[m.recipeId]?.ingredients.map((i) => i.ingredientId) ?? []),
+      ...state.shopping.map((i) => i.ingredientId),
+    ].filter((x): x is string => !!x);
+    loadCommunityPrices(ids, state.profile.country);
+  }, [state.onboarded, lexReady, state.profile.country, state.menu, state.shopping, recipes]);
   const [page, param] = useRoute();
 
   if (!state.onboarded) return <div className="app"><Onboarding /></div>;

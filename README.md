@@ -103,18 +103,21 @@ src/
 public/        manifest PWA + service worker (hors-ligne)
 ```
 
-## Prix réels : plan pour la France et le Portugal
+## Prix réels et données produits : Open Prices et Open Food Facts
 
-Aujourd'hui les prix sont **estimés** (prix de référence × indice pays × indice enseigne). Pour de vrais prix, par ordre de priorité :
+Ordre des sources de prix (`src/lib/pricing.ts`) : **tes tickets** (médiane 90 jours par enseigne) → **Open Prices** (médiane de l'enseigne si ≥ 2 relevés, sinon médiane du pays si ≥ 3 relevés × indice de l'enseigne ; valeurs aberrantes écartées) → **estimation**.
 
-1. **Open Prices (Open Food Facts)** — base ouverte (licence ODbL) de prix relevés en magasin, avec l'enseigne et le lieu, couvrant la France et le Portugal. API publique documentée sur `prices.openfoodfacts.org/api/docs`. C'est la source légale la plus simple à brancher (un `PriceProvider` dans `src/lib/pricing.ts`). Limite : couverture inégale selon les produits et les villes.
-2. **Tickets de caisse en photo** — même mécanique que l'import photo : l'utilisateur photographie son ticket, Claude en extrait articles + prix, rattachés à l'enseigne. Les prix deviennent personnels et exacts, et peuvent alimenter Open Prices.
-3. **Collecte automatique sur les drives**, via un Cloudflare Worker planifié (cron) qui interroge chaque nuit une liste fixe de ~150 produits de référence et stocke les prix au kg dans Cloudflare D1 :
-   - **France** : Carrefour, E.Leclerc Drive, Auchan, Intermarché ont des catalogues en ligne, mais protégés par des anti-robots et des CGU qui interdisent l'extraction automatique ;
-   - **Portugal** : Continente, Pingo Doce (via Mercadão), Auchan.pt, Intermarché : catalogues en ligne plus accessibles. Des prestataires vendent déjà ces données agrégées (Apify, Jsonify) ;
-   - à faire seulement après lecture des CGU et du `robots.txt` de chaque enseigne, à faible fréquence ; ou via un prestataire de données sous licence.
+- **Catégories** : chaque aliment du dictionnaire porte sa catégorie Open Food Facts (champ `k` de `public/lexicon.json`, ex. `en:chicken-breasts`), calculée par `npm run lexicon:categories` à partir de la taxonomie des catégories ; corrections manuelles dans `CATEGORY_OVERRIDES` (`src/lib/openprices.ts`).
+- **Serveur** (`server/core.mjs`, routes du Worker, réponses mises en cache 12 h à 7 jours) :
+  - `GET /api/prices?cat=en:…&country=PT&currency=EUR` : relevés Open Prices des 12 derniers mois (produits en vrac via `category_tag`, produits emballés via les catégories de leur fiche), filtrés par pays, convertis en prix au kilo ;
+  - `GET /api/off/category?cat=en:…&country=PT` : produits les plus scannés du rayon (photo, Nutri-Score, valeurs nutritionnelles) ;
+  - `GET /api/off/product?code=…` : fiche d'un produit par code-barres.
+  - User-Agent `CookingHub/1.0 (contact)` demandé par Open Food Facts : secret `OFF_CONTACT` du Worker.
+- **Dans l'appli** : prix « Open Prices » dans les fiches produit, recettes et comparatifs ; section « Prix de la communauté » (par enseigne) et « Dans les rayons » ; photo et valeurs moyennes pour 100 g quand le produit n'en a pas ; bouton **Code-barres** dans le frigo (scan caméra sur Chrome Android, saisie des chiffres ailleurs, dont Safari iPhone).
+- **Licences** : données Open Food Facts et Open Prices sous **ODbL** (citées dans l'appli), photos sous **CC BY-SA**.
+- Pistes : renvoyer les tickets validés vers Open Prices (compte Open Food Facts, avec l'accord de l'utilisateur) ; collecte automatique sur les sites des enseignes (voir CGU).
 
 ## Limites du prototype & prochaines étapes
-- **Prix** : estimations (voir ci-dessus).
+- **Prix** : estimations quand ni tes tickets ni Open Prices n'ont de relevé (voir ci-dessus).
 - **Base d'ingrédients** : ~110 ingrédients ; à étendre (ou brancher Open Food Facts / Ciqual) pour mieux reconnaître les recettes importées.
 - **Compte & synchro** : les données restent sur l'appareil (localStorage) ; un backend (ex. Supabase ou Cloudflare D1) permettrait de partager frigo et liste au sein du foyer.

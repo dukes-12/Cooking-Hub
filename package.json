@@ -13,7 +13,8 @@
     "recipes:import": "tsx scripts/import-recipes.ts",
     "deploy": "npm run build && wrangler deploy",
     "preview:cf": "npm run build && wrangler dev",
-    "lexicon:build": "tsx scripts/build-lexicon.ts"
+    "lexicon:build": "tsx scripts/build-lexicon.ts && tsx scripts/attach-categories.ts",
+    "lexicon:categories": "tsx scripts/attach-categories.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",

@@ -11,6 +11,8 @@ let entries: LexEntry[] = [];
 const byId = new Map<string, LexEntry>();
 /** id de notre ingrédient détaillé → son entrée du dictionnaire */
 const byOwn = new Map<string, LexEntry>();
+/** catégorie Open Food Facts → entrée (nos ingrédients détaillés d'abord) */
+const byCat = new Map<string, LexEntry>();
 /** nom normalisé → entrées ; les noms français passent avant les portugais, puis anglais. */
 const byName = new Map<string, LexEntry[]>();
 let ready = false;
@@ -23,9 +25,11 @@ export function setLexicon(list: LexEntry[]) {
   byId.clear();
   byName.clear();
   byOwn.clear();
+  byCat.clear();
   for (const e of list) {
     byId.set(e.id, e);
     if (e.o) byOwn.set(e.o, e);
+    if (e.k && (!byCat.has(e.k) || (e.o && !byCat.get(e.k)!.o))) byCat.set(e.k, e);
   }
   for (const lang of LANGS) {
     for (const e of list) {
@@ -73,6 +77,11 @@ export function useLexiconReady(): boolean {
 /** Entrée du dictionnaire d'un produit de l'app ("poulet" ou "lex:artichoke"). */
 export function entryForProduct(id: string): LexEntry | undefined {
   return id.startsWith('lex:') ? byId.get(id.slice(4)) : byOwn.get(id);
+}
+
+/** Aliment du dictionnaire rattaché à une catégorie Open Food Facts (ex. "en:chicken-breasts"). */
+export function entryForCategory(tag: string): LexEntry | undefined {
+  return byCat.get(tag);
 }
 
 export function lexiconSize(): number {

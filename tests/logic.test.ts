@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { SEED_RECIPES } from '../src/data/recipes';
 import { adaptRecipe } from '../src/lib/adapt';
 import { fromSchemaRecipe, parseIngredientLine, parseISODuration } from '../src/lib/importer';
@@ -9,7 +9,11 @@ import { buildShoppingList } from '../src/lib/shopping';
 import { DEFAULT_PROFILE } from '../src/state';
 import type { ChosenStore, Profile, Receipt, ReceiptLine } from '../src/types';
 // @ts-expect-error module JS du serveur
-import { extractRecipe, geocodeGoogle, publicConfig, receiptFromPhotos } from '../server/core.mjs';
+import { extractRecipe, geocodeGoogle, offCategory, offProduct, openPrices, publicConfig, receiptFromPhotos } from '../server/core.mjs';
+import { readFileSync } from 'node:fs';
+import { attachCategories } from '../scripts/lib/categories';
+import { setLexicon } from '../src/lib/lexicon';
+import { categoryFor, communityStats, ingredientForCategories, setCommunityPrices } from '../src/lib/openprices';
 
 const recipe = (id: string) => SEED_RECIPES.find((r) => r.id === id)!;
 const profile = (p: Partial<Profile> = {}): Profile => ({ ...DEFAULT_PROFILE, ...p });
@@ -263,5 +267,78 @@ describe('Google Maps (serveur)', () => {
   it('ne publie que la clé navigateur, jamais la clé serveur', () => {
     expect(publicConfig({ GOOGLE_MAPS_API_KEY: 'secret' })).toEqual({ mapsKey: null, mapId: 'DEMO_MAP_ID' });
     expect(publicConfig({ GOOGLE_MAPS_API_KEY: 'secret', GOOGLE_MAPS_BROWSER_KEY: 'pub' }).mapsKey).toBe('pub');
+  });
+});
+
+describe('Open Food Facts / Open Prices', () => {
+  beforeAll(() => setLexicon(JSON.parse(readFileSync(new URL('../public/lexicon.json', import.meta.url), 'utf8'))));
+
+  it('rattache les aliments aux catégories Open Food Facts', () => {
+    const taxo = 'en: Chicken breasts\nfr: Blancs de poulet\n\nen: Rices, Rice\nfr: Riz\n';
+    const entries = [{ id: 'chicken-breast', en: ['chicken breast'], fr: ['blanc de poulet'] }, { id: 'rice', en: ['rice'], fr: ['riz'] }, { id: 'x', en: ['unobtainium'], fr: [] }] as { id: string; en: string[]; fr: string[]; k?: string }[];
+    expect(attachCategories(entries, taxo)).toBe(2);
+    expect(entries.map((e) => e.k)).toEqual(['en:chicken-breasts', 'en:rices', undefined]);
+    expect(categoryFor('poulet')).toBe('en:chicken-breasts');
+    expect(categoryFor('pomme')).toBe('en:apples');
+    expect(ingredientForCategories(['en:meats', 'en:poultries', 'en:chicken-breasts'])).toBe('poulet');
+  });
+
+  it('interroge Open Prices (catégorie et fiches produit) et calcule le prix au kilo', async () => {
+    const urls: string[] = [];
+    const uas: string[] = [];
+    const fake = async (url: string, init: { headers: Record<string, string> }) => {
+      urls.push(url);
+      uas.push(init.headers['User-Agent']);
+      const loose = url.includes('category_tag=');
+      return new Response(JSON.stringify({
+        total: 2,
+        items: loose
+          ? [{ price: '7.99', price_per: 'KILOGRAM', currency: 'EUR', date: '2026-09-01', location: { osm_brand: 'Continente', osm_address_country_code: 'PT', osm_address_city: 'Lisboa' } },
+             { price: '9.50', price_per: 'KILOGRAM', currency: 'EUR', date: '2026-09-02', location: { osm_brand: 'Carrefour', osm_address_country_code: 'FR' } }]
+          : [{ price: '3.20', price_per: null, currency: 'EUR', date: '2026-09-03', product: { product_quantity: 400, product_quantity_unit: 'g' }, location: { osm_name: 'Pingo Doce', osm_address_country_code: 'PT' } }],
+      }));
+    };
+    const res = await openPrices({ cat: 'en:chicken-breasts', country: 'PT', currency: 'EUR' }, 'CookingHub/1.0 (test)', fake);
+    expect(res.status).toBe(200);
+    expect(urls).toHaveLength(2);
+    expect(urls.some((u) => u.includes('category_tag=en%3Achicken-breasts'))).toBe(true);
+    expect(urls.some((u) => u.includes('product__categories_tags__contains=en%3Achicken-breasts'))).toBe(true);
+    expect(urls.every((u) => u.includes('currency=EUR') && u.includes('order_by=-date'))).toBe(true);
+    expect(uas[0]).toBe('CookingHub/1.0 (test)');
+    expect(res.body.items.map((i: { brand: string; perKg: number }) => [i.brand, i.perKg])).toEqual([['Continente', 7.99], ['Pingo Doce', 8]]);
+    expect((await openPrices({ cat: 'bad tag' }, 'ua', fake)).status).toBe(400);
+  });
+
+  it('lit une fiche Open Food Facts et retombe sur le monde entier si le pays a trop peu de produits', async () => {
+    expect((await offProduct('abc', 'ua')).status).toBe(400);
+    const one = await offProduct('5601312000000', 'ua', async () => new Response(JSON.stringify({ product: { code: '5601312000000', product_name: 'Leite meio gordo', brands: 'Mimosa', product_quantity: 1000, product_quantity_unit: 'ml', nutriscore_grade: 'b', categories_tags: ['en:milks', 'en:semi-skimmed-milks'], nutriments: { 'energy-kcal_100g': 46 } } })));
+    expect(one.body.product).toMatchObject({ name: 'Leite meio gordo', qty: 1000, qtyUnit: 'ml', nutriscore: 'b', kcal: 46 });
+    const calls: string[] = [];
+    const cat = await offCategory({ cat: 'en:artichokes', country: 'PT' }, 'ua', async (url: string) => {
+      calls.push(url);
+      const products = url.includes('countries_tags') ? [] : [{ code: '1', product_name: 'Artichauts' }, { code: '2', product_name: 'Coeurs' }];
+      return new Response(JSON.stringify({ products }));
+    });
+    expect(calls).toHaveLength(2);
+    expect(calls[0]).toContain('countries_tags=en%3Aportugal');
+    expect(cat.body.products).toHaveLength(2);
+  });
+
+  it('ordre des prix : tickets > Open Prices (enseigne, puis pays) > estimation', () => {
+    const estimate = pricePerKg('poulet', 'pt-pingodoce', 'PT')!;
+    const item = (brand: string, perKg: number) => ({ perKg, unit: null, currency: 'EUR', date: '2026-09-01', brand, city: '', lat: null, lon: null });
+    setCommunityPrices('en:chicken-breasts', 'PT', [item('Continente', 7), item('Continente Bom Dia', 7.4), item('Pingo Doce', 6.5), item('Lidl', 99)]);
+    const stats = communityStats('poulet', 'PT')!;
+    expect(stats.byChain.find((c) => c.chainId === 'pt-continente')).toMatchObject({ count: 2 });
+    expect(pricePerKg('poulet', 'pt-continente', 'PT')).toBeCloseTo(7.2);
+    expect(priceSource('poulet', 'pt-continente', 'PT')).toBe('community');
+    // Une seule mesure chez Pingo Doce : médiane du pays (la valeur aberrante à 99 € est écartée).
+    expect(pricePerKg('poulet', 'pt-pingodoce', 'PT')).toBeCloseTo(7 * 0.98);
+    expect(pricePerKg('poulet', 'pt-pingodoce', 'PT')).not.toBeCloseTo(estimate);
+    setObservedPrices([{ productId: 'poulet', storeKey: 's', chainId: 'pt-continente', country: 'PT', date: new Date().toISOString().slice(0, 10), pricePerKg: 9, unitPrice: 9, label: '', receiptId: 'r' }]);
+    expect(pricePerKg('poulet', 'pt-continente', 'PT')).toBe(9);
+    setObservedPrices([]);
+    setCommunityPrices('en:chicken-breasts', 'PT', []);
+    expect(pricePerKg('poulet', 'pt-pingodoce', 'PT')).toBeCloseTo(estimate);
   });
 });

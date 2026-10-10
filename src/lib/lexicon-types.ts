@@ -17,6 +17,8 @@ export interface LexEntry {
   w?: string;
   /** Code Ciqual (table de composition française) quand il est connu. */
   c?: string;
+  /** Catégorie de produits Open Food Facts (ex. "en:chicken-breasts"), clé des prix Open Prices. */
+  k?: string;
   /** Langues dont le nom principal a été complété par traduction (à relire). */
   x?: ('fr' | 'pt' | 'en')[];
 }

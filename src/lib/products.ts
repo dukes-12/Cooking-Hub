@@ -41,7 +41,7 @@ export interface StorePrice {
   chain: Chain;
   country: string;
   perKg: number | null;
-  source: 'observed-store' | 'observed' | 'estimate' | null;
+  source: 'observed-store' | 'observed' | 'community' | 'estimate' | null;
   lastDate?: string;
   count?: number;
 }
@@ -56,7 +56,7 @@ export function pricesInMyStores(id: string, profile: Profile, observations: Pri
         return { store: s, chain, country: chain.country, perKg: median(mine.map((o) => o.pricePerKg!)), source: 'observed-store' as const, lastDate: mine[0].date, count: mine.length };
       }
       const perKg = pricePerKg(id, chain.id, chain.country);
-      const src = priceSource(id, chain.id);
+      const src = priceSource(id, chain.id, chain.country);
       return { store: s, chain, country: chain.country, perKg, source: src };
     })
     .filter((p) => p.chain)
@@ -68,7 +68,7 @@ export function pricesEverywhere(id: string): { country: (typeof COUNTRIES)[numb
   return COUNTRIES.map((country) => ({
     country,
     prices: CHAINS.filter((c) => c.country === country.code)
-      .map((chain) => ({ chain, country: country.code, perKg: pricePerKg(id, chain.id, country.code), source: priceSource(id, chain.id) }))
+      .map((chain) => ({ chain, country: country.code, perKg: pricePerKg(id, chain.id, country.code), source: priceSource(id, chain.id, country.code) }))
       .filter((p) => p.perKg != null)
       .sort((a, b) => a.perKg! - b.perKg!),
   })).filter((g) => g.prices.length);
