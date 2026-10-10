@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { RecipeRow, useMatches } from '../components/RecipeCard';
 import { Chip, ChipGroup, Empty, Sheet } from '../components/ui';
-import { CATEGORY_LABELS, getCountry } from '../data/reference';
+import { CATEGORY_LABELS, CUISINES, getCountry } from '../data/reference';
 import { normalize } from '../lib/text';
 import { go } from '../router';
 import { useApp } from '../state';
@@ -25,12 +25,11 @@ export function Search() {
   const { state } = useApp();
   const matches = useMatches();
   const [q, setQ] = useState('');
-  const [f, setF] = useState<Filters>(DEFAULT);
+  const [f, setF] = useState<Filters>(() => ({ ...DEFAULT, cuisines: state.profile.cuisines }));
   const [sort, setSort] = useState<Sort>('score');
   const [open, setOpen] = useState(false);
   const currency = getCountry(state.profile.country).currency;
 
-  const cuisines = useMemo(() => [...new Set(matches.map((m) => m.adapted.recipe.cuisine))].sort(), [matches]);
 
   const results = useMemo(() => {
     const n = normalize(q);
@@ -41,7 +40,7 @@ export function Search() {
         if (!f.showIncompatible && a.status === 'incompatible') return false;
         if (n && !normalize([r.title, r.cuisine, ...a.lines.map((l) => l.ingredient?.name ?? l.original.name)].join(' ')).includes(n)) return false;
         if (f.categories.length && !f.categories.includes(r.category)) return false;
-        if (f.cuisines.length && !f.cuisines.includes(r.cuisine)) return false;
+        if (f.cuisines.length && r.origin && !f.cuisines.includes(r.origin)) return false;
         if (a.totalMin != null && a.totalMin > f.maxMin) return false;
         if (a.costPerServing != null && a.costPerServing > f.maxCost) return false;
         if (f.maxKcal < 1500 && a.nutrition.kcal > f.maxKcal) return false;
@@ -102,8 +101,8 @@ export function Search() {
           <ChipGroup<Category> options={Object.entries(CATEGORY_LABELS).map(([id, label]) => ({ id: id as Category, label }))} value={f.categories} onChange={(categories) => setF({ ...f, categories })} />
         </div>
         <div className="field">
-          <span>Cuisine</span>
-          <ChipGroup options={cuisines.map((c) => ({ id: c, label: c }))} value={f.cuisines} onChange={(cuisines) => setF({ ...f, cuisines })} />
+          <span>Cuisines <span className="small muted">(par défaut celles de ton profil)</span></span>
+          <ChipGroup options={CUISINES.map((c) => ({ id: c.code, label: `${c.flag} ${c.label}` }))} value={f.cuisines} onChange={(cuisines) => setF({ ...f, cuisines })} />
         </div>
         <label className="field">
           <span>Temps total max : <b>{f.maxMin >= 240 ? 'illimité' : `${f.maxMin} min`}</b></span>

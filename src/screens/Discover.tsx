@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { MetaRow, RecipeVisual, StatusBadge, useMatches } from '../components/RecipeCard';
 import { Chip, Empty } from '../components/ui';
-import { CATEGORY_LABELS } from '../data/reference';
+import { CATEGORY_LABELS, matchesCuisines } from '../data/reference';
 import type { Match } from '../lib/adapt';
 import { go } from '../router';
 import { useApp } from '../state';
@@ -21,8 +21,9 @@ export function Discover() {
         .filter((m) => m.adapted.status !== 'incompatible')
         .filter((m) => !state.passed.includes(m.adapted.recipe.id) && !state.favorites.includes(m.adapted.recipe.id))
         .filter((m) => cat === 'all' || m.adapted.recipe.category === cat)
+        .filter((m) => matchesCuisines(m.adapted.recipe, state.profile.cuisines))
         .sort((a, b) => b.score - a.score),
-    [matches, state.passed, state.favorites, cat],
+    [matches, state.passed, state.favorites, cat, state.profile.cuisines],
   );
 
   const flash = (msg: string) => {

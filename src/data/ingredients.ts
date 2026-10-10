@@ -43,6 +43,7 @@ export const INGREDIENTS: Ingredient[] = [
   ing('poire', 'Poire', 'fruits-legumes', 'pc', [50, 0.4, 11, 0.1], 3, [], { pieceG: 160, aliases: ['poires'], subs: ['pomme'] }),
   ing('banane', 'Banane', 'fruits-legumes', 'pc', [90, 1.1, 20, 0.3], 2.1, [], { pieceG: 120, aliases: ['bananes'] }),
   ing('fruits-rouges', 'Fruits rouges', 'surgeles', 'g', [45, 1, 8, 0.4], 9, [], { aliases: ['framboises', 'myrtilles', 'fraises', 'fruits rouges surgeles'] }),
+  ing('chou-kale', 'Chou kale (couve)', 'fruits-legumes', 'g', [49, 4.3, 5, 0.9], 7, [], { aliases: ['kale', 'chou frise', 'couve', 'couve galega', 'chou vert'], subs: ['epinard'] }),
   ing('persil', 'Persil', 'fruits-legumes', 'g', [36, 3, 3, 0.8], 20, [], { aliases: ['persil plat'], subs: ['coriandre', 'ciboulette'] }),
   ing('coriandre', 'Coriandre', 'fruits-legumes', 'g', [23, 2, 1, 0.5], 25, [], { aliases: ['coriandre fraiche'], subs: ['persil'] }),
   ing('basilic', 'Basilic', 'fruits-legumes', 'g', [23, 3, 1, 0.6], 30, [], { aliases: ['basilic frais'], subs: ['persil'] }),
@@ -55,6 +56,7 @@ export const INGREDIENTS: Ingredient[] = [
   ing('dinde', 'Escalope de dinde', 'boucherie', 'g', [110, 24, 0, 1.5], 12, ['meat', 'poultry'], { aliases: ['dinde'], subs: ['poulet'] }),
   ing('boeuf-hache', 'Bœuf haché 5%', 'boucherie', 'g', [125, 21, 0, 5], 13, ['meat', 'beef'], { aliases: ['viande hachee', 'steak hache', 'boeuf hache'], subs: ['lentilles', 'proteines-soja'] }),
   ing('boeuf-braiser', 'Bœuf à braiser', 'boucherie', 'g', [150, 28, 0, 4], 15, ['meat', 'beef'], { aliases: ['paleron', 'boeuf bourguignon', 'joue de boeuf', 'boeuf'] }),
+  ing('porc', 'Escalope / échine de porc', 'boucherie', 'g', [140, 21, 0, 6], 9.5, ['meat', 'pork'], { aliases: ['porc', 'echine de porc', 'escalope de porc', 'filet mignon de porc', 'cotes de porc', 'lombo de porco', 'febras'], subs: ['dinde', 'poulet'] }),
   ing('lardons', 'Lardons', 'boucherie', 'g', [270, 15, 0.5, 23], 11, ['meat', 'pork'], { aliases: ['lardon', 'lardons fumes'], subs: ['lardons-volaille'] }),
   ing('lardons-volaille', 'Lardons de volaille', 'boucherie', 'g', [140, 18, 1, 7], 13, ['meat', 'poultry'], { aliases: ['allumettes de dinde'], subs: ['lardons'] }),
   ing('jambon', 'Jambon blanc', 'boucherie', 'pc', [115, 20, 1, 3.5], 14, ['meat', 'pork'], { pieceG: 45, aliases: ['tranche de jambon', 'tranches de jambon', 'jambon'], subs: ['dinde'] }),
@@ -65,6 +67,7 @@ export const INGREDIENTS: Ingredient[] = [
   ing('saumon', 'Pavé de saumon', 'poissonnerie', 'g', [200, 20, 0, 13], 24, ['fish'], { aliases: ['saumon', 'paves de saumon', 'filet de saumon'], subs: ['cabillaud'] }),
   ing('cabillaud', 'Dos de cabillaud', 'poissonnerie', 'g', [82, 18, 0, 0.7], 22, ['fish'], { aliases: ['cabillaud', 'colin', 'poisson blanc', 'merlu'], subs: ['saumon'] }),
   ing('thon-boite', 'Thon en boîte', 'conserves', 'g', [116, 26, 0, 1], 14, ['fish'], { aliases: ['thon', 'thon au naturel'], subs: ['pois-chiches'] }),
+  ing('morue', 'Morue dessalée (bacalhau)', 'poissonnerie', 'g', [105, 23, 0, 0.9], 16, ['fish'], { aliases: ['morue', 'bacalhau', 'cabillaud sale', 'bacalhau demolhado'], subs: ['cabillaud'] }),
   ing('crevette', 'Crevettes décortiquées', 'poissonnerie', 'g', [95, 21, 0, 1], 22, ['seafood'], { aliases: ['crevettes', 'gambas'] }),
 
   // Crèmerie

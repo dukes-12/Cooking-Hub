@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { getIngredient } from '../data/ingredients';
-import { ALLERGENS, chainsFor, COUNTRIES, DIETS, EQUIPMENT, getCountry, SPEEDS } from '../data/reference';
+import { ALLERGENS, chainsFor, COUNTRIES, CUISINES, DIETS, EQUIPMENT, getCountry, SPEEDS } from '../data/reference';
 import { findNearbyStores, fmtDistance, geocodePlace, getPosition, type NearbyStore } from '../lib/geo';
 import type { Allergen, ChosenStore, Diet, Equipment, Profile, Speed } from '../types';
 import { Chip, ChipGroup, IngredientPicker, Stepper } from './ui';
@@ -55,7 +55,8 @@ export function LocationFields({ p, set }: Props) {
   return (
     <>
       <div className="field">
-        <span>Pays</span>
+        <span>Pays où tu fais tes courses</span>
+        <span className="small muted">Sert aux prix et aux magasins. Les cuisines proposées se choisissent à part, dans « Tes goûts ».</span>
         <div className="chips">
           {COUNTRIES.map((c) => (
             <Chip key={c.code} active={p.country === c.code} onClick={() => set({ country: c.code, stores: p.country === c.code ? p.stores : [] })}>
@@ -142,6 +143,11 @@ export function DietFields({ p, set }: Props) {
 export function TasteFields({ p, set }: Props) {
   return (
     <>
+      <div className="field">
+        <span>🌍 Les cuisines que tu veux voir</span>
+        <ChipGroup options={CUISINES.map((c) => ({ id: c.code, label: `${c.flag} ${c.label}` }))} value={p.cuisines} onChange={(cuisines) => set({ cuisines })} />
+        <p className="small muted">{p.cuisines.length ? 'Seules ces cuisines seront proposées dans Découvrir.' : 'Aucune sélection = toutes les cuisines.'} Indépendant du pays où tu vis : au Portugal, tu peux garder les recettes françaises et portugaises.</p>
+      </div>
       <div className="field">
         <span>💚 Tes aliments préférés</span>
         <IngredientList ids={p.liked} tone="good" onChange={(liked) => set({ liked, disliked: p.disliked.filter((d) => !liked.includes(d)) })} suggestions={['poulet', 'pates', 'saumon', 'champignon', 'avocat', 'chocolat', 'emmental', 'pois-chiches', 'riz', 'oeuf']} />

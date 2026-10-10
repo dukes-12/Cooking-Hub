@@ -1,4 +1,5 @@
 import { INGREDIENTS } from '../data/ingredients';
+import { cuisineFromText } from '../data/reference';
 import type { Category, Equipment, Recipe, RecipeIngredient, Unit } from '../types';
 import { normalize, uid } from './text';
 
@@ -222,6 +223,7 @@ export function fromSchemaRecipe(r: Record<string, unknown>, url?: string, siteN
     color: PALETTE[title.length % PALETTE.length],
     image: image || undefined,
     cuisine: cuisine.split(',')[0],
+    origin: cuisineFromText(cuisine, url),
     category,
     servings,
     prepMin: prep ?? (total && cook ? total - cook : total),

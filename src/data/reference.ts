@@ -158,6 +158,36 @@ export const EQUIPMENT_ALTERNATIVES: Partial<Record<Equipment, { with: Equipment
   microwave: [{ with: 'stovetop', tip: 'Au bain-marie ou à la casserole à feu doux.' }],
 };
 
+/** Cuisines proposées, indépendantes du pays où l'on vit. */
+export const CUISINES: { code: string; label: string; flag: string; match: RegExp }[] = [
+  { code: 'FR', label: 'Française', flag: '🇫🇷', match: /fran[cç]ais|french|fran[cç]a/i },
+  { code: 'PT', label: 'Portugaise', flag: '🇵🇹', match: /portug/i },
+  { code: 'IT', label: 'Italienne', flag: '🇮🇹', match: /itali/i },
+  { code: 'ES', label: 'Espagnole', flag: '🇪🇸', match: /espagn|spanish|espanhol/i },
+  { code: 'GR', label: 'Grecque', flag: '🇬🇷', match: /grec|greek|grega/i },
+  { code: 'ME', label: 'Moyen-Orient & Maghreb', flag: '🧆', match: /moyen|orient|liban|maroc|maghreb|middle east|turc/i },
+  { code: 'IN', label: 'Indienne', flag: '🇮🇳', match: /indien|indian|indiana/i },
+  { code: 'AS', label: 'Asiatique', flag: '🥢', match: /asiat|asian|chin|japon|thai|vietnam|cor[ée]e|asi[aá]tic/i },
+  { code: 'MX', label: 'Mexicaine & latino', flag: '🇲🇽', match: /mexic|tex|latin|br[eé]sil/i },
+  { code: 'WORLD', label: 'Healthy & monde', flag: '🌍', match: /healthy|monde|world|fusion/i },
+];
+
+export function cuisineFromText(text: string, url?: string): string | undefined {
+  const hit = CUISINES.find((c) => c.match.test(text));
+  if (hit) return hit.code;
+  const tld = url ? new URL(url).hostname.split('.').pop() : undefined;
+  return tld === 'pt' ? 'PT' : tld === 'fr' ? 'FR' : undefined;
+}
+
+/** Recette à proposer selon les cuisines choisies (les recettes d'origine inconnue passent toujours). */
+export function matchesCuisines(recipe: { origin?: string }, cuisines: string[]): boolean {
+  return !cuisines.length || !recipe.origin || cuisines.includes(recipe.origin);
+}
+
+export function getCuisine(code: string | undefined) {
+  return CUISINES.find((c) => c.code === code);
+}
+
 export const SPEEDS: Record<Speed, { label: string; desc: string; maxMin: number }> = {
   express: { label: 'Express', desc: '≤ 25 min, le soir en semaine', maxMin: 25 },
   balanced: { label: 'Équilibré', desc: '≤ 45 min la plupart du temps', maxMin: 45 },

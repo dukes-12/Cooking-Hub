@@ -10,6 +10,7 @@ export const DEFAULT_PROFILE: Profile = {
   name: '',
   household: 2,
   country: 'FR',
+  cuisines: [],
   stores: [],
   diets: [],
   allergens: [],

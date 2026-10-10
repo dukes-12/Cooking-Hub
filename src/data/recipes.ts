@@ -1,5 +1,6 @@
 import type { Recipe, RecipeIngredient, Unit } from '../types';
 import { INGREDIENT_BY_ID } from './ingredients';
+import { cuisineFromText } from './reference';
 
 function i(id: string, qty: number | null, unit: Unit, extra: Partial<RecipeIngredient> = {}): RecipeIngredient {
   const ing = INGREDIENT_BY_ID[id];
@@ -295,4 +296,62 @@ export const SEED_RECIPES: Recipe[] = [
       'Servir avec un peu de moutarde.',
     ],
   },
+  // ---------- Cuisine portugaise ----------
+  {
+    id: 'bacalhau-a-bras', title: 'Bacalhau à Brás', emoji: '🐟', color: '#f2cc8f', cuisine: 'Portugaise', category: 'plat',
+    servings: 4, prepMin: 20, cookMin: 20, difficulty: 2, equipment: ['stovetop'],
+    ingredients: [i('morue', 400, 'g'), i('pomme-de-terre', 500, 'g'), i('oignon', 2, 'pc'), i('ail', 2, 'gousse'), i('oeuf', 6, 'pc'), i('huile-olive', 4, 'cas'), i('persil', 10, 'g', { optional: true }), salt, pepper],
+    steps: [
+      'Effilocher la morue dessalée en retirant peau et arêtes.',
+      'Couper les pommes de terre en très fines allumettes et les faire dorer à la poêle dans un fond d’huile. Égoutter.',
+      'Faire fondre les oignons émincés et l’ail dans l’huile d’olive, ajouter la morue et cuire 5 min.',
+      'Ajouter les pommes de terre, puis les œufs battus hors du feu ou à feu très doux : ils doivent rester crémeux. Parsemer de persil.',
+    ],
+  },
+  {
+    id: 'caldo-verde', title: 'Caldo verde', emoji: '🥬', color: '#90a955', cuisine: 'Portugaise', category: 'soupe',
+    servings: 4, prepMin: 15, cookMin: 30, difficulty: 1, equipment: ['stovetop', 'blender'],
+    ingredients: [i('pomme-de-terre', 600, 'g'), i('chou-kale', 200, 'g'), i('oignon', 1, 'pc'), i('ail', 2, 'gousse'), i('chorizo', 100, 'g', { optional: true, note: 'chouriço' }), i('huile-olive', 3, 'cas'), salt],
+    steps: [
+      'Cuire pommes de terre, oignon et ail dans 1,2 L d’eau salée pendant 20 min.',
+      'Mixer en velouté (ou écraser au presse-purée).',
+      'Ajouter le chou émincé en très fines lanières et cuire 5 min.',
+      'Servir avec un filet d’huile d’olive et des rondelles de chouriço grillées.',
+    ],
+  },
+  {
+    id: 'frango-piri-piri', title: 'Poulet piri-piri', emoji: '🌶️', color: '#e85d04', cuisine: 'Portugaise', category: 'plat',
+    servings: 4, prepMin: 15, cookMin: 40, difficulty: 1, equipment: ['oven'],
+    ingredients: [i('cuisse-poulet', 1000, 'g'), i('citron', 1, 'pc'), i('ail', 4, 'gousse'), i('piment', 2, 'cac'), i('paprika', 1, 'cac'), i('huile-olive', 4, 'cas'), i('salade', 1, 'pc', { optional: true }), salt],
+    steps: [
+      'Mixer ou hacher l’ail avec le piment, le paprika, le jus de citron, l’huile et le sel.',
+      'Entailler le poulet, l’enrober de marinade et laisser reposer au moins 30 min.',
+      'Rôtir 40 min à 210 °C en arrosant à mi-cuisson (ou au barbecue).',
+      'Servir avec une salade verte et des frites ou du riz.',
+    ],
+  },
+  {
+    id: 'bifanas', title: 'Bifanas (sandwich au porc mariné)', emoji: '🥪', color: '#dda15e', cuisine: 'Portugaise', category: 'snack',
+    servings: 4, prepMin: 10, cookMin: 15, difficulty: 1, equipment: ['stovetop'],
+    ingredients: [i('porc', 500, 'g', { note: 'escalopes très fines' }), i('vin-blanc', 150, 'ml'), i('ail', 4, 'gousse'), i('paprika', 1, 'cac'), i('herbes-provence', 1, 'pincee', { note: 'laurier' }), i('pain', 320, 'g', { note: '4 petits pains' }), i('moutarde', 1, 'cas', { optional: true }), i('huile-olive', 2, 'cas'), salt],
+    steps: [
+      'Faire mariner le porc avec le vin blanc, l’ail écrasé, le paprika, le laurier et le sel (1 h idéalement).',
+      'Saisir les escalopes à la poêle bien chaude dans l’huile, 1 à 2 min par face.',
+      'Verser la marinade et laisser réduire 5 min.',
+      'Garnir les petits pains de viande, arroser de sauce, ajouter un peu de moutarde.',
+    ],
+  },
+  {
+    id: 'arroz-doce', title: 'Arroz doce (riz au lait portugais)', emoji: '🍚', color: '#f6e7b4', cuisine: 'Portugaise', category: 'dessert',
+    servings: 6, prepMin: 5, cookMin: 45, difficulty: 2, equipment: ['stovetop'],
+    ingredients: [i('riz', 200, 'g', { note: 'riz rond' }), i('lait', 1000, 'ml'), i('sucre', 160, 'g'), i('citron', 1, 'pc', { note: 'zeste' }), i('oeuf', 3, 'pc', { note: 'jaunes' }), i('cannelle', 1, 'cac'), salt],
+    steps: [
+      'Cuire le riz 5 min dans 40 cl d’eau avec une pincée de sel et le zeste de citron.',
+      'Ajouter le lait chaud petit à petit et cuire 30 min à feu doux en remuant.',
+      'Ajouter le sucre, puis hors du feu les jaunes d’œufs délayés dans un peu de lait. Remettre 2 min à feu doux.',
+      'Verser dans un plat et dessiner des motifs avec la cannelle. Servir froid.',
+    ],
+  },
 ];
+
+for (const r of SEED_RECIPES) r.origin ??= cuisineFromText(r.cuisine);

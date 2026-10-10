@@ -36,7 +36,7 @@ Déploiement manuel possible : `npx wrangler login` puis `npm run deploy`. Test 
 
 | Écran | Rôle |
 |---|---|
-| **Onboarding** | Foyer, pays, magasins (géolocalisation via OpenStreetMap ou choix manuel), régime, allergies, interdits, aliments aimés / détestés, équipement, rythme (express → mijoté), budget/portion, objectif calorique. |
+| **Onboarding** | Foyer, pays des courses (prix) et cuisines souhaitées (indépendantes du pays : FR, PT, IT…), magasins (géolocalisation via OpenStreetMap ou choix manuel), régime, allergies, interdits, aliments aimés / détestés, équipement, rythme (express → mijoté), budget/portion, objectif calorique. |
 | **Découvrir** | Pile de cartes à swiper : → favori, ← passer, ↑ ajouter au menu. Classées par score de compatibilité (goûts, temps, budget, frigo, calories). |
 | **Recherche** | Texte + filtres (type de plat, cuisine, temps, prix/portion, calories, « avec ce que j'ai »), tri par pertinence / prix / temps / calories. |
 | **Fiche recette** | Format uniformisé : temps, kcal, coût/portion, difficulté, ingrédients mis à l'échelle, état frigo de chaque ingrédient, remplacements (⇄), comparatif de prix par enseigne, macros, étapes cochables, « J'ai cuisiné » (décompte le frigo). |

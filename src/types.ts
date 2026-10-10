@@ -90,6 +90,8 @@ export interface Recipe {
   color: string;
   image?: string;
   cuisine: string;
+  /** Origine de la recette (code de CUISINES), indépendante du pays où l'on vit. */
+  origin?: string;
   category: Category;
   servings: number;
   prepMin: number | null;
@@ -139,7 +141,10 @@ export interface ChosenStore {
 export interface Profile {
   name: string;
   household: number;
+  /** Pays où l'on fait ses courses : sert uniquement aux prix et aux magasins. */
   country: string;
+  /** Cuisines dont on veut des suggestions (vide = toutes). */
+  cuisines: string[];
   city?: string;
   location?: { lat: number; lon: number };
   stores: ChosenStore[];

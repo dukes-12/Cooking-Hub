@@ -122,7 +122,23 @@ describe('import portugais', () => {
   it('reconnaît les recettes en portugais', () => {
     expect(parseIngredientLine('2 colheres de sopa de azeite')).toMatchObject({ ingredientId: 'huile-olive', qty: 2, unit: 'cas' });
     expect(parseIngredientLine('3 dentes de alho')).toMatchObject({ ingredientId: 'ail', qty: 3, unit: 'gousse' });
-    expect(parseIngredientLine('500 g de bacalhau')).toMatchObject({ ingredientId: 'cabillaud', qty: 500, unit: 'g' });
+    expect(parseIngredientLine('500 g de bacalhau')).toMatchObject({ ingredientId: 'morue', qty: 500, unit: 'g' });
     expect(parseIngredientLine('1 pitada de sal')).toMatchObject({ ingredientId: 'sel', unit: 'pincee' });
+  });
+});
+
+describe('cuisines', () => {
+  it('sépare cuisines proposées et pays des prix', async () => {
+    const { matchesCuisines } = await import('../src/data/reference');
+    const pt = recipe('caldo-verde');
+    const fr = recipe('gratin-dauphinois');
+    expect(pt.origin).toBe('PT');
+    expect(fr.origin).toBe('FR');
+    expect(matchesCuisines(pt, ['FR', 'PT'])).toBe(true);
+    expect(matchesCuisines(recipe('bolognaise'), ['FR', 'PT'])).toBe(false);
+    expect(matchesCuisines(pt, [])).toBe(true);
+    // Recette française chiffrée avec les prix portugais
+    const a = adaptRecipe(fr, profile({ country: 'PT', cuisines: ['FR', 'PT'], stores: [{ chainId: 'pt-continente', label: 'Continente' }] }), []);
+    expect(a.quote.best!.chain.id).toBe('pt-continente');
   });
 });
