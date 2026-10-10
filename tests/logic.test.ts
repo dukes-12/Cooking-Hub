@@ -7,7 +7,7 @@ import { buildShoppingList } from '../src/lib/shopping';
 import { DEFAULT_PROFILE } from '../src/state';
 import type { Profile } from '../src/types';
 // @ts-expect-error module JS du serveur
-import { extractRecipe } from '../server/index.mjs';
+import { extractRecipe } from '../server/core.mjs';
 
 const recipe = (id: string) => SEED_RECIPES.find((r) => r.id === id)!;
 const profile = (p: Partial<Profile> = {}): Profile => ({ ...DEFAULT_PROFILE, ...p });
@@ -115,5 +115,14 @@ describe('données', () => {
       expect(a.nutrition.kcal, r.id).toBeLessThan(1400);
       expect(a.costPerServing!, r.id).toBeLessThan(12);
     }
+  });
+});
+
+describe('import portugais', () => {
+  it('reconnaît les recettes en portugais', () => {
+    expect(parseIngredientLine('2 colheres de sopa de azeite')).toMatchObject({ ingredientId: 'huile-olive', qty: 2, unit: 'cas' });
+    expect(parseIngredientLine('3 dentes de alho')).toMatchObject({ ingredientId: 'ail', qty: 3, unit: 'gousse' });
+    expect(parseIngredientLine('500 g de bacalhau')).toMatchObject({ ingredientId: 'cabillaud', qty: 500, unit: 'g' });
+    expect(parseIngredientLine('1 pitada de sal')).toMatchObject({ ingredientId: 'sel', unit: 'pincee' });
   });
 });

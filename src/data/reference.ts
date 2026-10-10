@@ -15,6 +15,7 @@ export const COUNTRIES: Country[] = [
   { code: 'CH', name: 'Suisse', flag: '🇨🇭', currency: 'CHF', priceFactor: 1.55 },
   { code: 'LU', name: 'Luxembourg', flag: '🇱🇺', currency: 'EUR', priceFactor: 1.1 },
   { code: 'CA', name: 'Canada', flag: '🇨🇦', currency: 'CAD', priceFactor: 1.75 },
+  { code: 'PT', name: 'Portugal', flag: '🇵🇹', currency: 'EUR', priceFactor: 0.9 },
   { code: 'ES', name: 'Espagne', flag: '🇪🇸', currency: 'EUR', priceFactor: 0.88 },
   { code: 'DE', name: 'Allemagne', flag: '🇩🇪', currency: 'EUR', priceFactor: 0.97 },
 ];
@@ -74,6 +75,15 @@ export const CHAINS: Chain[] = [
   { id: 'ca-metro', name: 'Metro', country: 'CA', index: 1.05, osm: ['metro'], color: '#e2001a' },
   { id: 'ca-provigo', name: 'Provigo', country: 'CA', index: 1.04, osm: ['provigo'], color: '#e2001a' },
   { id: 'ca-walmart', name: 'Walmart', country: 'CA', index: 0.9, osm: ['walmart'], color: '#0071ce' },
+  // Portugal
+  { id: 'pt-continente', name: 'Continente', country: 'PT', index: 1.0, osm: ['continente', 'continente modelo', 'continente bom dia'], color: '#e30613' },
+  { id: 'pt-pingodoce', name: 'Pingo Doce', country: 'PT', index: 0.98, osm: ['pingo doce'], color: '#7ab51d' },
+  { id: 'pt-lidl', name: 'Lidl', country: 'PT', index: 0.88, osm: ['lidl'], color: '#0050aa' },
+  { id: 'pt-aldi', name: 'Aldi', country: 'PT', index: 0.88, osm: ['aldi'], color: '#00005f' },
+  { id: 'pt-mercadona', name: 'Mercadona', country: 'PT', index: 0.95, osm: ['mercadona'], color: '#00a650' },
+  { id: 'pt-auchan', name: 'Auchan', country: 'PT', index: 1.0, osm: ['auchan', 'my auchan'], color: '#e30613' },
+  { id: 'pt-intermarche', name: 'Intermarché', country: 'PT', index: 0.99, osm: ['intermarché', 'intermarche'], color: '#e2001a' },
+  { id: 'pt-minipreco', name: 'Minipreço', country: 'PT', index: 0.97, osm: ['minipreço', 'minipreco'], color: '#e2001a' },
   // Espagne
   { id: 'es-mercadona', name: 'Mercadona', country: 'ES', index: 0.95, osm: ['mercadona'], color: '#00a650' },
   { id: 'es-dia', name: 'Dia', country: 'ES', index: 0.9, osm: ['dia', 'dia %'], color: '#e2001a' },

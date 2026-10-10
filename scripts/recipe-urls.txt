@@ -1,0 +1,2 @@
+# Une URL de recette par ligne (sites publiant le format schema.org : Marmiton, 750g, Cuisine AZ, Jow, Ricardo,
+# BBC Good Food, receitas Continente / Pingo Doce…). Puis : npm run recipes:import

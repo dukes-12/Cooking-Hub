@@ -19,6 +19,16 @@ export function getPosition(): Promise<{ lat: number; lon: number }> {
   });
 }
 
+/** Position d'une ville / d'un code postal via OpenStreetMap Nominatim (si la géolocalisation est refusée). */
+export async function geocodePlace(query: string, country: string): Promise<{ lat: number; lon: number; label: string }> {
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=${country.toLowerCase()}&q=${encodeURIComponent(query)}`;
+  const res = await fetch(url, { headers: { 'Accept-Language': 'fr' } });
+  if (!res.ok) throw new Error(`Recherche de lieu indisponible (${res.status}).`);
+  const [hit] = (await res.json()) as { lat: string; lon: string; display_name: string }[];
+  if (!hit) throw new Error(`Lieu « ${query} » introuvable.`);
+  return { lat: Number(hit.lat), lon: Number(hit.lon), label: hit.display_name };
+}
+
 function haversine(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
   const R = 6371000;
   const toRad = (d: number) => (d * Math.PI) / 180;

@@ -55,9 +55,18 @@ function useStore() {
     }
   }, [state]);
 
+  // Catalogue généré par `npm run recipes:import` (public/catalog.json), chargé à la volée.
+  const [catalog, setCatalog] = useState<Recipe[]>([]);
+  useEffect(() => {
+    fetch('/catalog.json')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list: Recipe[]) => Array.isArray(list) && setCatalog(list))
+      .catch(() => undefined);
+  }, []);
+
   const recipes = useMemo<Record<string, Recipe>>(
-    () => Object.fromEntries([...SEED_RECIPES, ...state.imported].map((r) => [r.id, r])),
-    [state.imported],
+    () => Object.fromEntries([...SEED_RECIPES, ...catalog, ...state.imported].map((r) => [r.id, r])),
+    [catalog, state.imported],
   );
 
   const patch = useCallback((fn: (s: AppState) => Partial<AppState>) => setState((s) => ({ ...s, ...fn(s) })), []);

@@ -14,6 +14,20 @@ const EN_ALIASES: Record<string, string> = {
   spinach: 'epinard', mushrooms: 'champignon', zucchini: 'courgette', parsley: 'persil', cumin: 'cumin', paprika: 'paprika',
 };
 
+/** Recettes portugaises (accents retirés par normalize). */
+const PT_ALIASES: Record<string, string> = {
+  ovo: 'oeuf', ovos: 'oeuf', farinha: 'farine', acucar: 'sucre', manteiga: 'beurre', leite: 'lait', cebola: 'oignon',
+  cebolas: 'oignon', alho: 'ail', 'dentes de alho': 'ail', 'dente de alho': 'ail', sal: 'sel', pimenta: 'poivre',
+  azeite: 'huile-olive', oleo: 'huile-tournesol', frango: 'poulet', 'peito de frango': 'poulet', arroz: 'riz',
+  massa: 'pates', esparguete: 'pates', tomate: 'tomate', tomates: 'tomate', natas: 'creme', queijo: 'emmental',
+  'queijo ralado': 'emmental', cenoura: 'carotte', cenouras: 'carotte', batata: 'pomme-de-terre', batatas: 'pomme-de-terre',
+  limao: 'citron', bacalhau: 'cabillaud', salmao: 'saumon', camarao: 'crevette', salsa: 'persil', coentros: 'coriandre',
+  chourico: 'chorizo', 'carne picada': 'boeuf-hache', 'grao de bico': 'pois-chiches', feijao: 'haricots-rouges',
+  'leite de coco': 'lait-coco', cogumelos: 'champignon', espinafres: 'epinard', courgete: 'courgette', pimento: 'poivron',
+  'vinho branco': 'vin-blanc', 'vinho tinto': 'vin-rouge', 'caldo': 'bouillon', mel: 'miel', chocolate: 'chocolat',
+  'fermento': 'levure', canela: 'cannelle', iogurte: 'yaourt', 'polpa de tomate': 'tomates-concassees',
+};
+
 interface AliasEntry { alias: string; id: string }
 let aliasIndex: AliasEntry[] | null = null;
 function getAliasIndex(): AliasEntry[] {
@@ -22,7 +36,7 @@ function getAliasIndex(): AliasEntry[] {
     for (const ing of INGREDIENTS) {
       for (const a of [ing.name, ing.id.replace(/-/g, ' '), ...ing.aliases]) aliasIndex.push({ alias: normalize(a), id: ing.id });
     }
-    for (const [a, id] of Object.entries(EN_ALIASES)) aliasIndex.push({ alias: a, id });
+    for (const [a, id] of [...Object.entries(EN_ALIASES), ...Object.entries(PT_ALIASES)]) aliasIndex.push({ alias: a, id });
     // Les alias les plus longs d'abord ("huile d olive" avant "huile").
     aliasIndex.sort((x, y) => y.alias.length - x.alias.length);
   }
@@ -46,10 +60,10 @@ const UNIT_WORDS: [RegExp, Unit, number?][] = [
   [/^(ml|millilitres?)\b/, 'ml'],
   [/^(cl|centilitres?)\b/, 'cl'],
   [/^(l|litres?)\b/, 'l'],
-  [/^(c\.? ?a\.? ?s\.?|cas|cs|cuill?eres? a soupe|cuill?ere a soupe|c\. a soupe|tbsp|tablespoons?)\b/, 'cas'],
-  [/^(c\.? ?a\.? ?c\.?|cac|cc|cuill?eres? a cafe|cuill?ere a cafe|c\. a cafe|tsp|teaspoons?)\b/, 'cac'],
-  [/^(pincees?|pinch)\b/, 'pincee'],
-  [/^(gousses?|cloves?)\b/, 'gousse'],
+  [/^(c\.? ?a\.? ?s\.?|cas|cs|cuill?eres? a soupe|cuill?ere a soupe|c\. a soupe|tbsp|tablespoons?|colher(es)? de sopa|c\. de sopa)\b/, 'cas'],
+  [/^(c\.? ?a\.? ?c\.?|cac|cc|cuill?eres? a cafe|cuill?ere a cafe|c\. a cafe|tsp|teaspoons?|colher(es)? de cha|c\. de cha)\b/, 'cac'],
+  [/^(pincees?|pinch|pitada)\b/, 'pincee'],
+  [/^(gousses?|cloves?|dentes?)\b/, 'gousse'],
   [/^(tranches?|slices?)\b/, 'tranche'],
   [/^(bottes?|bouquets?)\b/, 'botte'],
   [/^(sachets?)\b/, 'sachet'],
@@ -94,7 +108,7 @@ export function parseIngredientLine(line: string): RecipeIngredient {
       break;
     }
   }
-  rest = rest.replace(/^(de |d |of )/, '').trim();
+  rest = rest.replace(/^(de |d |of |do |da |dos |das )/, '').trim();
   const ingredientId = matchIngredient(rest || raw);
   const ing = ingredientId ? INGREDIENTS.find((i) => i.id === ingredientId) : undefined;
   // "200 farine" sans unité pour un ingrédient au poids → grammes.
@@ -241,4 +255,33 @@ export async function importFromUrl(url: string): Promise<Recipe> {
   const data = await res.json().catch(() => ({ error: 'Réponse invalide du serveur.' }));
   if (!res.ok || data.error) throw new Error(data.error ?? `Erreur ${res.status}`);
   return fromSchemaRecipe(data.recipe, data.url, data.siteName);
+}
+
+// ---------- Import depuis des photos ----------
+
+/** Réduit une photo (max 1600 px, JPEG) pour accélérer l'envoi et l'analyse. */
+async function shrink(file: File): Promise<{ mediaType: string; data: string }> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+  return { mediaType: 'image/jpeg', data: dataUrl.slice(dataUrl.indexOf(',') + 1) };
+}
+
+export async function importFromPhotos(files: File[]): Promise<Recipe> {
+  const images = await Promise.all(files.slice(0, 4).map(shrink));
+  const res = await fetch('/api/photo', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ images }),
+  });
+  const data = await res.json().catch(() => ({ error: 'Réponse invalide du serveur.' }));
+  if (!res.ok || data.error) throw new Error(data.error ?? `Erreur ${res.status}`);
+  const recipe = fromSchemaRecipe(data.recipe, undefined, 'Photo');
+  recipe.source = { name: 'Photo' };
+  return recipe;
 }

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { getIngredient } from '../data/ingredients';
 import { ALLERGENS, chainsFor, COUNTRIES, DIETS, EQUIPMENT, getCountry, SPEEDS } from '../data/reference';
-import { findNearbyStores, fmtDistance, getPosition, type NearbyStore } from '../lib/geo';
+import { findNearbyStores, fmtDistance, geocodePlace, getPosition, type NearbyStore } from '../lib/geo';
 import type { Allergen, ChosenStore, Diet, Equipment, Profile, Speed } from '../types';
 import { Chip, ChipGroup, IngredientPicker, Stepper } from './ui';
 
@@ -33,22 +33,24 @@ export function LocationFields({ p, set }: Props) {
     set({ stores: chosen.has(store.chainId) ? p.stores.filter((s) => s.chainId !== store.chainId) : [...p.stores, store] });
   };
 
-  const locate = async () => {
+  const search = async (where: () => Promise<{ lat: number; lon: number }>) => {
     setLoading(true);
     setError(null);
     try {
-      const pos = await getPosition();
-      set({ location: pos });
+      const pos = await where();
+      set({ location: { lat: pos.lat, lon: pos.lon } });
       const stores = await findNearbyStores(pos, p.country);
       // Une ligne par enseigne : le magasin le plus proche.
       const seen = new Set<string>();
       setNearby(stores.filter((s) => (seen.has(s.chain.id) ? false : (seen.add(s.chain.id), true))));
     } catch (e) {
-      setError((e as Error).message + ' Choisis tes enseignes dans la liste ci-dessous.');
+      setError((e as Error).message + ' Tu peux aussi choisir tes enseignes dans la liste ci-dessous.');
     } finally {
       setLoading(false);
     }
   };
+  const locate = () => search(getPosition);
+  const searchCity = () => p.city?.trim() && search(() => geocodePlace(p.city!.trim(), p.country));
 
   return (
     <>
@@ -62,10 +64,13 @@ export function LocationFields({ p, set }: Props) {
           ))}
         </div>
       </div>
-      <label className="field">
-        <span>Ville (optionnel)</span>
-        <input className="input" value={p.city ?? ''} placeholder="ex. Lyon" onChange={(e) => set({ city: e.target.value })} />
-      </label>
+      <div className="field">
+        <span>Ville ou code postal</span>
+        <div className="search-bar">
+          <input className="input" value={p.city ?? ''} placeholder="ex. Lyon, 75011, Porto" onChange={(e) => set({ city: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && searchCity()} />
+          <button type="button" className="btn btn-soft" onClick={searchCity} disabled={!p.city?.trim() || loading}>Chercher</button>
+        </div>
+      </div>
 
       <div className="field">
         <span>Tes magasins</span>
