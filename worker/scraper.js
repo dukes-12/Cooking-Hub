@@ -211,17 +211,20 @@ export async function runScraper(env, now = new Date()) {
       await kv.put('scrape:state', JSON.stringify(state));
       return `découverte : ${state.sitemaps.length} sitemaps`;
     }
-    // Le passage précédent s'est arrêté en cours de route (limite de temps de calcul) : on le note et on continue.
+    // Passage précédent encore en cours (gros fichier lent à télécharger) : on attend.
+    // Au-delà de 5 minutes, on le considère comme arrêté (limite de calcul) : on le note et on continue.
     if (state.current) {
+      if (now - (state.current.startedAt ?? 0) < 5 * 60000) return 'passage précédent en cours';
       state.log.push(`échec : ${state.current.url} à partir de ${state.current.offset ?? 0}`);
       state.current = null;
     }
     const job = state.sitemaps.shift();
     if (job) {
       // Progression enregistrée avant le travail : un passage qui échoue ne bloque pas le cycle sur ce fichier.
-      state.current = job;
+      state.current = { ...job, startedAt: now.getTime() };
       await kv.put('scrape:state', JSON.stringify(state));
       const offset = job.offset ?? 0;
+      const t0 = Date.now();
       let msg;
       try {
         const res = await fetch(job.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(60000) });
@@ -233,7 +236,7 @@ export async function runScraper(env, now = new Date()) {
         const brand = CHAINS.find((c) => c.id === job.chain).brand;
         for (const id of Object.keys(cand)) cand[id] = rankCandidates(cand[id], brand);
         if (more) state.sitemaps.unshift({ ...job, offset: offset + URLS_PER_RUN });
-        msg = `sitemap ${job.url} [${offset}-${offset + urls.length}] : ${hits} correspondances`;
+        msg = `sitemap ${job.url} [${offset}-${offset + urls.length}] : ${hits} correspondances (${Math.round((Date.now() - t0) / 1000)} s)`;
       } catch (e) {
         msg = `${job.url}: ${e.message}`;
       }
@@ -255,7 +258,9 @@ export async function runScraper(env, now = new Date()) {
       await kv.put('scrape:state', JSON.stringify(state));
       return `prix : ${state.queue.length} pages à lire`;
     }
+    if (state.current && now - (state.current.startedAt ?? 0) < 5 * 60000) return 'passage précédent en cours';
     const batch = state.queue.splice(0, PAGES_PER_RUN);
+    state.current = { prices: true, startedAt: now.getTime() };
     await kv.put('scrape:state', JSON.stringify(state));
     for (const { chain, id, url } of batch) {
       try {
@@ -265,6 +270,7 @@ export async function runScraper(env, now = new Date()) {
         if (state.log.length < 50) state.log.push(`${url}: ${e.message}`);
       }
     }
+    state.current = null;
     if (state.queue.length) {
       await kv.put('scrape:state', JSON.stringify(state));
       return `prix : ${batch.length} pages lues, ${state.queue.length} restantes`;
