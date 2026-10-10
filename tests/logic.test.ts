@@ -373,3 +373,31 @@ describe('produits personnels', () => {
     setCustomIngredients([]);
   });
 });
+
+describe('comparatif des magasins', () => {
+  it('compare ton panier et chaque produit entre tes magasins à partir des tickets', async () => {
+    const { basketFromReceipts, compareBasket, compareProducts, storePrice } = await import('../src/lib/compare');
+    const line = (productId: string, weightKg: number, totalPrice: number) => ({ id: productId, label: productId, productId, count: 1, size: null, sizeUnit: 'none' as const, weightKg, totalPrice, toFridge: false });
+    const today = new Date().toISOString().slice(0, 10);
+    const lumiar = { id: 'st-l', chainId: 'pt-continente', label: 'Continente Lumiar' };
+    const alvalade = { id: 'st-a', chainId: 'pt-pingodoce', label: 'Pingo Doce Alvalade' };
+    const receipts: Receipt[] = [
+      { id: 'r1', storeKey: 'st-l', chainId: 'pt-continente', country: 'PT', date: today, total: null, createdAt: 0, lines: [line('poulet', 0.5, 4), line('carotte', 1, 1.2)] },
+      { id: 'r2', storeKey: 'st-a', chainId: 'pt-pingodoce', country: 'PT', date: today, total: null, createdAt: 0, lines: [line('poulet', 0.5, 3.5)] },
+    ];
+    const obs = observationsFromReceipts(receipts);
+    setObservedPrices(obs);
+    expect(storePrice('poulet', lumiar, obs)).toEqual({ perKg: 8, origin: 'store' });
+    expect(storePrice('carotte', alvalade, obs)?.origin).toBe('estimate');
+    const basket = basketFromReceipts(receipts);
+    expect(basket.find((b) => b.productId === 'poulet')).toMatchObject({ grams: 500, purchases: 2 });
+    const { totals, items } = compareBasket([lumiar, alvalade], basket, obs);
+    expect(items).toBe(2);
+    expect(totals.find((t) => t.store.id === 'st-l')).toMatchObject({ fromTickets: 2 });
+    expect(totals.find((t) => t.store.id === 'st-a')).toMatchObject({ fromTickets: 1 });
+    const poulet = compareProducts([lumiar, alvalade], obs).find((p) => p.productId === 'poulet')!;
+    expect(poulet.quotes.map((q) => q.store.id)).toEqual(['st-a', 'st-l']);
+    expect(Math.round(poulet.spread)).toBe(14);
+    setObservedPrices([]);
+  });
+});

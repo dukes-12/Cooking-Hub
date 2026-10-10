@@ -9,6 +9,7 @@ import { fmtMoney } from '../lib/pricing';
 import { draftFromApi, fridgeQuantity, linePricePerKg, readReceiptPhotos, type ReceiptDraft } from '../lib/receipts';
 import { findStore, storeKey, storeTitle } from '../lib/stores';
 import { uid } from '../lib/text';
+import { findNearbyStores, fmtDistance, geocodePlace, getPosition, type NearbyStore } from '../lib/geo';
 import { back, go } from '../router';
 import { useApp } from '../state';
 import type { ChosenStore, ReceiptLine, SizeUnit } from '../types';
@@ -143,6 +144,32 @@ function ReceiptReview({ draft, onChange, onCancel, onConfirm }: { draft: Receip
   const setReceipt = (patch: Partial<typeof receipt>) => onChange({ ...draft, receipt: { ...receipt, ...patch } });
   const setLine = (id: string, patch: Partial<ReceiptLine>) => setReceipt({ lines: receipt.lines.map((l) => (l.id === id ? { ...l, ...patch } : l)) });
 
+  // Trouver le magasin exact (Google) : autour de moi, ou autour de l'adresse lue sur le ticket.
+  const [nearby, setNearby] = useState<NearbyStore[] | null>(null);
+  const [finding, setFinding] = useState(false);
+  const [findError, setFindError] = useState<string | null>(null);
+  const findStore = async (where: 'me' | 'ticket') => {
+    setFinding(true);
+    setFindError(null);
+    try {
+      const address = newStore?.address;
+      const pos = where === 'ticket' && address ? await geocodePlace(address, state.profile.country) : await getPosition();
+      const chainId = creating ? newChain : receipt.chainId;
+      const found = await findNearbyStores(pos, state.profile.country);
+      setNearby(chainId ? found.filter((n) => n.chain.id === chainId) : found);
+    } catch (e) {
+      setFindError((e as Error).message);
+    } finally {
+      setFinding(false);
+    }
+  };
+  const pickNearby = (n: NearbyStore) => {
+    const saved = state.profile.stores.find((x) => x.chainId === n.chain.id && x.lat != null && x.lon != null && Math.abs(x.lat - n.lat) < 0.0015 && Math.abs(x.lon! - n.lon) < 0.0015);
+    const store: ChosenStore = saved ?? { id: uid('st-'), chainId: n.chain.id, label: n.name, address: n.address, lat: n.lat, lon: n.lon, distanceM: Math.round(n.distanceM), source: 'google' };
+    onChange({ newStore: saved ? undefined : store, receipt: { ...receipt, storeKey: storeKey(store), chainId: store.chainId, country: n.chain.country } });
+    setNearby(null);
+  };
+
   const chooseStore = (key: string) => {
     if (key === NEW_STORE) return setReceipt({ storeKey: NEW_STORE, chainId: newChain });
     const s = stores.find((x) => storeKey(x) === key);
@@ -191,6 +218,24 @@ function ReceiptReview({ draft, onChange, onCancel, onConfirm }: { draft: Receip
             <option value={NEW_STORE}>＋ Autre magasin…</option>
           </select>
         </label>
+        {nearby ? (
+          <div className="list nearby-pick">
+            {nearby.length === 0 && <p className="small muted">Aucun magasin de cette enseigne trouvé à proximité.</p>}
+            {nearby.slice(0, 8).map((n, i) => (
+              <button key={i} className="store-item" onClick={() => pickNearby(n)}>
+                <span className="store-dot" style={{ background: n.chain.color }} />
+                <span className="grow"><b>{n.name}</b><span className="small muted block">{n.address} · {fmtDistance(n.distanceM)}</span></span>
+              </button>
+            ))}
+            <button className="link small" onClick={() => setNearby(null)}>Fermer</button>
+          </div>
+        ) : (
+          <div className="row gap wrap">
+            <button className="btn btn-soft btn-sm" disabled={finding} onClick={() => findStore('me')}>{finding ? 'Recherche…' : '📍 Trouver le magasin autour de moi'}</button>
+            {newStore?.address && <button className="btn btn-soft btn-sm" disabled={finding} onClick={() => findStore('ticket')}>🧾 D'après l'adresse du ticket</button>}
+          </div>
+        )}
+        {findError && <p className="small warn-text">{findError}</p>}
         {creating && (
           <div className="row gap">
             <label className="field grow">

@@ -1,7 +1,9 @@
 import { useCommunityPrices } from '../lib/openprices';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StoreMap, type MapPoint } from '../components/StoreMap';
-import { Empty } from '../components/ui';
+import { Chip, Empty } from '../components/ui';
+import { getIngredient } from '../data/ingredients';
+import { basketFromReceipts, compareBasket, compareProducts, referenceBasket, type PriceOrigin } from '../lib/compare';
 import { getChain } from '../data/reference';
 import { findNearbyStores, fmtDistance, geocodePlace, getPosition, type NearbyStore } from '../lib/geo';
 import { costOf, fmtMoney } from '../lib/pricing';
@@ -9,6 +11,7 @@ import { mapsLink, REFERENCE_BASKET, storeKey, storeTitle } from '../lib/stores'
 import { uid } from '../lib/text';
 import { go } from '../router';
 import { useApp } from '../state';
+import { TicketStoreSelect } from './StoreDetail';
 import type { ChosenStore } from '../types';
 
 type Tab = 'mine' | 'map' | 'compare';
@@ -44,8 +47,22 @@ export function Stores() {
 }
 
 function MyStores({ onMap }: { onMap: () => void }) {
-  const { state, observations } = useApp();
+  const { state, observations, actions } = useApp();
   const { stores, country } = state.profile;
+  // Tickets dont le magasin a été supprimé (ou jamais choisi) : à rattacher pour garder leurs prix.
+  const orphans = state.receipts.filter((r) => !stores.some((s) => storeKey(s) === r.storeKey));
+  const orphanBlock = orphans.length > 0 && (
+    <div className="card orphan-tickets">
+      <b>🧾 {orphans.length} ticket{orphans.length > 1 ? 's' : ''} sans magasin</b>
+      <p className="small muted">Rattache-{orphans.length > 1 ? 'les' : 'le'} à un magasin pour que {orphans.length > 1 ? 'leurs' : 'ses'} prix comptent dans le comparatif.</p>
+      {orphans.map((r) => (
+        <div key={r.id} className="orphan-row">
+          <span className="small">{new Date(r.date).toLocaleDateString('fr-FR')} · {r.lines.length} articles · {fmtMoney(r.total ?? r.lines.reduce((x, l) => x + l.totalPrice, 0), r.country)}</span>
+          <TicketStoreSelect value={r.storeKey} onChange={(k) => actions.moveReceipt(r.id, k)} />
+        </div>
+      ))}
+    </div>
+  );
   if (!stores.length) {
     return (
       <Empty emoji="🏪" title="Aucun magasin enregistré">
@@ -56,6 +73,7 @@ function MyStores({ onMap }: { onMap: () => void }) {
   }
   return (
     <div className="list">
+      {orphanBlock}
       {stores.map((s) => {
         const key = storeKey(s);
         const chain = getChain(s.chainId);
@@ -209,35 +227,84 @@ function MapTab() {
   );
 }
 
+const ORIGIN_LABEL: Record<PriceOrigin, string> = { store: 'ticket', chain: 'ticket enseigne', community: 'Open Prices', estimate: 'estimation' };
+
 function Compare() {
   const { state, observations } = useApp();
-  const { stores, country } = state.profile;
-  const rows = stores
-    .map((s) => {
-      const chain = getChain(s.chainId)!;
-      const c = chain?.country ?? country;
-      return { s, chain, total: basketTotal(s.chainId, c), country: c, observed: observations.filter((o) => o.storeKey === storeKey(s)).length };
-    })
-    .filter((r) => r.chain)
-    .sort((a, b) => a.total - b.total);
-  if (!rows.length) return <Empty emoji="⚖️" title="Rien à comparer">Ajoute au moins deux magasins.</Empty>;
-  const best = rows[0].total;
+  const { stores } = state.profile;
+  const mineBasket = useMemo(() => basketFromReceipts(state.receipts), [state.receipts]);
+  const [mode, setMode] = useState<'mine' | 'ref' | 'products'>(mineBasket.length ? 'mine' : 'ref');
+  const basket = mode === 'mine' ? mineBasket : referenceBasket();
+  const result = useMemo(() => compareBasket(stores, basket, observations), [stores, basket, observations]); // eslint-disable-line react-hooks/exhaustive-deps
+  const products = useMemo(() => compareProducts(stores, observations), [stores, observations]);
+
+  if (stores.length < 2) return <Empty emoji="⚖️" title="Rien à comparer">Ajoute au moins deux magasins (onglet Carte), puis des tickets.</Empty>;
+  const best = result.totals[0]?.total ?? 0;
+  const money = (v: number, s: ChosenStore) => fmtMoney(v, getChain(s.chainId)?.country ?? state.profile.country);
+
   return (
     <>
-      <p className="small muted">Panier type de {REFERENCE_BASKET.length} produits courants (œufs, lait, pâtes, poulet, légumes…). Les prix relevés sur tes tickets remplacent les estimations.</p>
-      <div className="price-table">
-        {rows.map((r, i) => (
-          <button key={storeKey(r.s)} className={`price-row ${i === 0 ? 'best' : ''}`} onClick={() => go(`/store/${encodeURIComponent(storeKey(r.s))}`)}>
-            <span className="store-dot" style={{ background: r.chain.color }} />
-            <span className="grow">
-              {storeTitle(r.s)}
-              <span className="small muted block">{r.observed ? `${r.observed} prix relevés` : 'estimation'}</span>
-            </span>
-            <span className="small muted">{i === 0 ? 'le moins cher' : `+${Math.round(((r.total - best) / best) * 100)} %`}</span>
-            <b>{fmtMoney(r.total, r.country)}</b>
-          </button>
-        ))}
+      <div className="chips">
+        <Chip active={mode === 'mine'} onClick={() => setMode('mine')}>🧾 Mon panier</Chip>
+        <Chip active={mode === 'ref'} onClick={() => setMode('ref')}>🧺 Panier type</Chip>
+        <Chip active={mode === 'products'} onClick={() => setMode('products')}>🔎 Produit par produit</Chip>
       </div>
+
+      {mode !== 'products' ? (
+        mode === 'mine' && !mineBasket.length ? (
+          <Empty emoji="🧾" title="Pas encore de ticket">Ajoute tes tickets de caisse : ton panier (ce que tu achètes vraiment) sera comparé entre tes magasins.</Empty>
+        ) : (
+          <>
+            <p className="small muted">
+              {mode === 'mine'
+                ? `Les ${result.items} produits que tu achètes, aux quantités habituelles de tes tickets.`
+                : `Panier type de ${REFERENCE_BASKET.length} produits courants.`}{' '}
+              Prix de chaque magasin : tes tickets d'abord, puis Open Prices, sinon estimation.
+              {result.skipped > 0 && ` ${result.skipped} produit${result.skipped > 1 ? 's' : ''} sans prix dans tous les magasins ${result.skipped > 1 ? 'sont' : 'est'} laissé${result.skipped > 1 ? 's' : ''} de côté.`}
+            </p>
+            <div className="price-table">
+              {result.totals.map((r, i) => (
+                <button key={storeKey(r.store)} className={`price-row ${i === 0 ? 'best' : ''}`} onClick={() => go(`/store/${encodeURIComponent(storeKey(r.store))}`)}>
+                  <span className="store-dot" style={{ background: getChain(r.store.chainId)?.color }} />
+                  <span className="grow">
+                    {storeTitle(r.store)}
+                    <span className="small muted block">{r.fromTickets ? `${r.fromTickets}/${r.priced} prix de tes tickets ici` : 'aucun ticket ici : prix estimés'}</span>
+                  </span>
+                  <span className="small muted">{i === 0 ? 'le moins cher' : `+${money(r.total - best, r.store)}`}</span>
+                  <b>{money(r.total, r.store)}</b>
+                </button>
+              ))}
+            </div>
+          </>
+        )
+      ) : products.length === 0 ? (
+        <Empty emoji="🔎" title="Pas encore de comparaison">Dès qu'un produit apparaît sur un ticket, il est comparé avec tes autres magasins.</Empty>
+      ) : (
+        <>
+          <p className="small muted">Produits de tes tickets, du plus grand écart de prix au plus petit. « ticket » = prix payé dans ce magasin.</p>
+          <div className="list">
+            {products.map((p) => {
+              const ing = getIngredient(p.productId);
+              const unit = ing?.unit === 'ml' ? '/L' : '/kg';
+              return (
+                <div key={p.productId} className="card compare-card">
+                  <button className="row between link-plain" onClick={() => go(`/product/${encodeURIComponent(p.productId)}`)}>
+                    <b>{ing?.name ?? p.productId}</b>
+                    <span className="small muted">écart {Math.round(p.spread)} %</span>
+                  </button>
+                  {p.quotes.map((q, i) => (
+                    <div key={storeKey(q.store)} className={`compare-line ${i === 0 ? 'best' : ''}`}>
+                      <span className="store-dot" style={{ background: getChain(q.store.chainId)?.color }} />
+                      <span className="grow">{storeTitle(q.store)} <span className={`badge ${q.quote.origin === 'store' ? 'badge-good' : ''}`}>{ORIGIN_LABEL[q.quote.origin]}</span></span>
+                      <b>{money(q.quote.perKg, q.store)}{unit}</b>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
     </>
   );
 }

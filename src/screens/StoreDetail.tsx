@@ -5,7 +5,7 @@ import { getChain } from '../data/reference';
 import { fmtMoney } from '../lib/pricing';
 import { priceUnitLabel } from '../lib/products';
 import { median } from '../lib/receipts';
-import { findStore, mapsLink, REFERENCE_BASKET, storeTitle } from '../lib/stores';
+import { findStore, mapsLink, REFERENCE_BASKET, storeKey as keyOf, storeTitle } from '../lib/stores';
 import { back, go } from '../router';
 import { useApp } from '../state';
 import { basketTotal } from './Stores';
@@ -100,6 +100,7 @@ export function StoreDetail({ storeKey }: { storeKey: string }) {
                         <span>{fmtMoney(l.totalPrice, country)}</span>
                       </div>
                     ))}
+                    <TicketStoreSelect value={storeKey} onChange={(k) => { actions.moveReceipt(r.id, k); go(`/store/${encodeURIComponent(k)}`); }} />
                     <button className="link danger-text small" onClick={() => confirm('Supprimer ce ticket et ses prix ?') && actions.deleteReceipt(r.id)}>Supprimer ce ticket</button>
                   </>
                 )}
@@ -116,5 +117,21 @@ export function StoreDetail({ storeKey }: { storeKey: string }) {
         Retirer ce magasin
       </button>
     </div>
+  );
+}
+
+/** Choix du magasin d'un ticket déjà validé (ses prix suivent le ticket). */
+export function TicketStoreSelect({ value, onChange }: { value: string; onChange: (key: string) => void }) {
+  const { state } = useApp();
+  return (
+    <label className="field ticket-store">
+      <span className="small muted">Magasin de ce ticket</span>
+      <select className="input" value={value} onChange={(e) => e.target.value && onChange(e.target.value)}>
+        {!state.profile.stores.some((s) => keyOf(s) === value) && <option value="">Choisir un magasin…</option>}
+        {state.profile.stores.map((s) => (
+          <option key={keyOf(s)} value={keyOf(s)}>{storeTitle(s)}{s.address ? ` – ${s.address}` : ''}</option>
+        ))}
+      </select>
+    </label>
   );
 }

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { SEED_RECIPES } from './data/recipes';
 import { getIngredient, setCustomIngredients } from './data/ingredients';
+import { getChain } from './data/reference';
 import { labelKey } from './lib/custom';
 import type { AppState, ChosenStore, FridgeItem, Ingredient, PlannedMeal, Profile, Receipt, Recipe, ShoppingItem } from './types';
 import { observationsFromReceipts } from './lib/receipts';
@@ -186,6 +187,14 @@ function useStore() {
           fridge: s.fridge.filter((f) => f.ingredientId !== id),
           labelMemory: Object.fromEntries(Object.entries(s.labelMemory).filter(([, v]) => v !== id)),
         })),
+      /** Rattache un ticket (et donc ses prix) à un autre magasin. */
+      moveReceipt: (id: string, toKey: string) =>
+        patch((s) => {
+          const store = s.profile.stores.find((x) => storeKey(x) === toKey);
+          if (!store) return {};
+          const chain = getChain(store.chainId);
+          return { receipts: s.receipts.map((r) => (r.id === id ? { ...r, storeKey: toKey, chainId: store.chainId, country: chain?.country ?? r.country } : r)) };
+        }),
       deleteReceipt: (id: string) => patch((s) => ({ receipts: s.receipts.filter((r) => r.id !== id) })),
 
       saveImported: (r: Recipe) => patch((s) => ({ imported: [r, ...s.imported.filter((x) => x.id !== r.id)] })),
