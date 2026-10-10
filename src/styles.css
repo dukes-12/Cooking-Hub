@@ -361,3 +361,5 @@ div.ticket > .ticket-line.is-unmatched { border-left-color: var(--warn); }
 .map-dot { width: 18px; height: 18px; border-radius: 50%; background: var(--dot); border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.35); cursor: pointer; transform: translateY(50%); }
 .map-dot.is-nearby { width: 14px; height: 14px; border: 2px solid var(--dot); background: color-mix(in srgb, var(--dot) 30%, #fff); }
 .map-dot.is-me { width: 14px; height: 14px; background: #2f80ed; cursor: default; }
+.map-dot.is-selected { width: 24px; height: 24px; box-shadow: 0 0 0 4px color-mix(in srgb, var(--dot) 40%, transparent), 0 1px 4px rgba(0,0,0,0.4); }
+.map-sheet { display: flex; flex-direction: column; gap: 0.7rem; }

@@ -1,10 +1,10 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StoreMap, type MapPoint } from '../components/StoreMap';
 import { Empty } from '../components/ui';
 import { getChain } from '../data/reference';
 import { findNearbyStores, fmtDistance, geocodePlace, getPosition, type NearbyStore } from '../lib/geo';
 import { costOf, fmtMoney } from '../lib/pricing';
-import { REFERENCE_BASKET, storeKey, storeTitle } from '../lib/stores';
+import { mapsLink, REFERENCE_BASKET, storeKey, storeTitle } from '../lib/stores';
 import { uid } from '../lib/text';
 import { go } from '../router';
 import { useApp } from '../state';
@@ -89,6 +89,7 @@ function MapTab() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [city, setCity] = useState(profile.city ?? '');
+  const [selected, setSelected] = useState<string | null>(null);
 
   const search = async (where: () => Promise<{ lat: number; lon: number }>) => {
     setLoading(true);
@@ -97,6 +98,7 @@ function MapTab() {
       const pos = await where();
       setCenter({ lat: pos.lat, lon: pos.lon });
       actions.updateProfile({ location: { lat: pos.lat, lon: pos.lon } });
+      setSelected(null);
       setNearby(await findNearbyStores(pos, profile.country));
     } catch (e) {
       setError((e as Error).message);
@@ -105,28 +107,36 @@ function MapTab() {
     }
   };
 
+  // À l'ouverture de la carte, on cherche tout de suite les magasins autour de la dernière position connue.
+  useEffect(() => {
+    if (center && !nearby.length) search(async () => center);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const isSaved = (n: NearbyStore) =>
     profile.stores.some((s) => s.chainId === n.chain.id && s.lat != null && s.lon != null && Math.abs(s.lat - n.lat) < 0.0015 && Math.abs(s.lon - n.lon) < 0.0015);
 
-  const add = (n: NearbyStore) => {
+  const add = (n: NearbyStore): ChosenStore => {
     const store: ChosenStore = {
       id: uid('st-'), chainId: n.chain.id, label: n.name, address: n.address, lat: n.lat, lon: n.lon, distanceM: Math.round(n.distanceM), source: n.source,
     };
     actions.addStore(store);
+    return store;
   };
+  const unsaved = useMemo(() => nearby.filter((n) => !isSaved(n)), [nearby, profile.stores]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const points: MapPoint[] = useMemo(
     () => [
       ...profile.stores.filter((s) => s.lat != null && s.lon != null).map((s) => ({ key: storeKey(s), lat: s.lat!, lon: s.lon!, label: storeTitle(s), color: getChain(s.chainId)?.color ?? '#666', saved: true })),
-      ...nearby.filter((n) => !isSaved(n)).map((n, i) => ({ key: `near:${i}`, lat: n.lat, lon: n.lon, label: `${n.name} · ${fmtDistance(n.distanceM)}`, color: n.chain.color, saved: false })),
+      ...unsaved.map((n, i) => ({ key: `near:${i}`, lat: n.lat, lon: n.lon, label: `${n.name} · ${fmtDistance(n.distanceM)}`, color: n.chain.color, saved: false })),
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [profile.stores, nearby],
+    [profile.stores, unsaved],
   );
-  const onSelect = useCallback((key: string) => {
-    if (!key.startsWith('near:')) go(`/store/${encodeURIComponent(key)}`);
-    else document.getElementById(`nearby-${key.slice(5)}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, []);
+  const onSelect = useCallback((key: string) => setSelected(key), []);
+  const savedSel = selected && !selected.startsWith('near:') ? profile.stores.find((x) => storeKey(x) === selected) : undefined;
+  const nearSel = selected?.startsWith('near:') ? unsaved[Number(selected.slice(5))] : undefined;
+  const noCoords = profile.stores.filter((x) => x.lat == null).length;
 
   return (
     <>
@@ -139,7 +149,38 @@ function MapTab() {
       </div>
       {loading && <p className="small muted">Recherche des magasins…</p>}
       {error && <p className="small warn-text">{error}</p>}
-      {center ? <StoreMap center={center} points={points} onSelect={onSelect} /> : <p className="muted small">Localise-toi ou cherche une ville pour afficher la carte.</p>}
+      {center ? <StoreMap center={center} points={points} selected={selected} onSelect={onSelect} /> : <p className="muted small">Localise-toi ou cherche une ville pour afficher la carte.</p>}
+      {(savedSel || nearSel) && (
+        <div className="card map-sheet">
+          {savedSel ? (
+            <>
+              <div className="row between">
+                <span><b>{storeTitle(savedSel)}</b><span className="small muted block">{savedSel.address ?? getChain(savedSel.chainId)?.name} · dans mes magasins</span></span>
+                <button className="icon-btn sm" onClick={() => setSelected(null)} aria-label="Fermer">✕</button>
+              </div>
+              <div className="row gap">
+                <button className="btn btn-primary grow" onClick={() => go(`/receipt/${encodeURIComponent(selected!)}`)}>🧾 Ajouter un ticket</button>
+                <button className="btn btn-soft grow" onClick={() => go(`/store/${encodeURIComponent(selected!)}`)}>Voir les prix</button>
+              </div>
+              <a className="small link" href={mapsLink(savedSel)} target="_blank" rel="noreferrer">🗺️ Itinéraire dans Google Maps</a>
+            </>
+          ) : (
+            <>
+              <div className="row between">
+                <span><b>{nearSel!.name}</b><span className="small muted block">{nearSel!.address ?? nearSel!.chain.name} · {fmtDistance(nearSel!.distanceM)}</span></span>
+                <button className="icon-btn sm" onClick={() => setSelected(null)} aria-label="Fermer">✕</button>
+              </div>
+              <div className="row gap">
+                <button className="btn btn-primary grow" onClick={() => go(`/receipt/${encodeURIComponent(storeKey(add(nearSel!)))}`)}>🧾 Ajouter un ticket</button>
+                <button className="btn btn-soft grow" onClick={() => { add(nearSel!); setSelected(null); }}>＋ Mes magasins</button>
+              </div>
+              <a className="small link" href={mapsLink({ chainId: nearSel!.chain.id, label: nearSel!.name, address: nearSel!.address, lat: nearSel!.lat, lon: nearSel!.lon })} target="_blank" rel="noreferrer">🗺️ Itinéraire dans Google Maps</a>
+            </>
+          )}
+        </div>
+      )}
+      {noCoords > 0 && <p className="small muted">{noCoords} de tes magasins n'ont pas d'adresse précise et n'apparaissent donc pas sur la carte : touche un magasin de la carte puis « ＋ Mes magasins » pour ajouter le bon.</p>}
+      {unsaved.length === 0 && nearby.length > 0 && <p className="small muted">Tous les magasins trouvés sont déjà dans tes magasins.</p>}
       {nearby.length > 0 && (
         <>
           <p className="small muted">
@@ -149,7 +190,7 @@ function MapTab() {
             {nearby.map((n, i) => {
               const saved = isSaved(n);
               return (
-                <div key={i} id={`nearby-${i}`} className="store-item">
+                <div key={i} className="store-item">
                   <span className="store-dot" style={{ background: n.chain.color }} />
                   <span className="grow">
                     <b>{n.name}</b>

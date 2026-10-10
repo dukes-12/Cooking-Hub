@@ -225,6 +225,17 @@ export async function receiptFromPhotos(images, apiKey) {
  * On ne demande que id, nom, adresse et position : ce sont les champs les moins chers, et on ne garde
  * rien en cache (les conditions de Google n'autorisent à conserver durablement que le place_id).
  */
+/** Explique un refus de Google (statut + message, sans jamais citer la clé) et ce qu'il faut vérifier. */
+async function googleRefusal(res, what) {
+  const err = (await res.json().catch(() => ({})))?.error ?? {};
+  const hint =
+    res.status === 401 ? "La clé GOOGLE_MAPS_API_KEY du Worker est absente ou invalide : recolle-la dans Cloudflare (Settings → Variables and Secrets), sans espace ni retour à la ligne."
+    : res.status === 403 ? "Active « Places API (New) » dans Google Cloud et vérifie que la clé n'est pas restreinte à un autre service ni à un site web (cette clé-ci est utilisée par le serveur)."
+    : res.status === 400 ? "Requête ou clé refusée : vérifie la clé et l'activation de « Places API (New) »."
+    : '';
+  return `Google a refusé ${what} (${res.status} ${err.status ?? ''}). ${hint}`.trim();
+}
+
 export async function findStoresGoogle({ lat, lon, radiusM }, apiKey, fetchImpl = fetch) {
   if (!apiKey) return { status: 501, body: { error: 'Recherche Google non configurée : ajoute le secret GOOGLE_MAPS_API_KEY.' } };
   const la = Number(lat);
@@ -250,11 +261,7 @@ export async function findStoresGoogle({ lat, lon, radiusM }, apiKey, fetchImpl 
       }),
       signal: AbortSignal.timeout(10000),
     });
-    if (!res.ok) {
-      const detail = (await res.json().catch(() => ({})))?.error?.status;
-      if (res.status === 403 || res.status === 400) return { status: 502, body: { error: `Google a refusé la requête (${detail ?? res.status}). Vérifie que l'API Places (New) est activée et que la clé n'est pas restreinte à un autre service.` } };
-      return { status: 502, body: { error: `Google indisponible (${res.status}).` } };
-    }
+    if (!res.ok) return { status: 502, body: { error: await googleRefusal(res, 'la recherche de magasins') } };
     const data = await res.json();
     const stores = (data.places ?? [])
       .filter((p) => p.location)
@@ -277,7 +284,7 @@ export async function geocodeGoogle({ q, country }, apiKey, fetchImpl = fetch) {
       body: JSON.stringify({ textQuery: query, languageCode: 'fr', ...(/^[A-Z]{2}$/.test(country ?? '') ? { regionCode: country } : {}), pageSize: 1 }),
       signal: AbortSignal.timeout(10000),
     });
-    if (!res.ok) return { status: 502, body: { error: `Google a refusé la recherche du lieu (${res.status}).` } };
+    if (!res.ok) return { status: 502, body: { error: await googleRefusal(res, 'la recherche du lieu') } };
     const hit = (await res.json()).places?.[0];
     if (!hit?.location) return { status: 404, body: { error: `Lieu « ${query} » introuvable.` } };
     return { status: 200, body: { lat: hit.location.latitude, lon: hit.location.longitude, label: hit.formattedAddress ?? query } };

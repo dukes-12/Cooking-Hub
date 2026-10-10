@@ -44,9 +44,9 @@ function loadGoogleMaps(): Promise<MapsConfig> {
   return loading;
 }
 
-function dot(p: { color: string; saved: boolean } | null): HTMLElement {
+function dot(p: { color: string; saved: boolean } | null, selected = false): HTMLElement {
   const el = document.createElement('div');
-  el.className = `map-dot ${p ? (p.saved ? 'is-saved' : 'is-nearby') : 'is-me'}`;
+  el.className = `map-dot ${p ? (p.saved ? 'is-saved' : 'is-nearby') : 'is-me'}${selected ? ' is-selected' : ''}`;
   if (p) el.style.setProperty('--dot', p.color);
   return el;
 }
@@ -60,7 +60,7 @@ export function mapsAround(center: { lat: number; lon: number }): string {
  * Carte Google Maps : nos magasins en pastilles pleines, les magasins trouvés autour en pastilles claires.
  * Sans clé navigateur configurée, on propose d'ouvrir Google Maps à la place.
  */
-export function StoreMap({ center, points, onSelect }: { center: { lat: number; lon: number }; points: MapPoint[]; onSelect?: (key: string) => void }) {
+export function StoreMap({ center, points, selected, onSelect }: { center: { lat: number; lon: number }; points: MapPoint[]; selected?: string | null; onSelect?: (key: string) => void }) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<any>(null);
   const markers = useRef<any[]>([]);
@@ -107,11 +107,11 @@ export function StoreMap({ center, points, onSelect }: { center: { lat: number; 
     markers.current.forEach((m) => (m.map = null));
     markers.current = [new AdvancedMarkerElement({ map: map.current, position: { lat: center.lat, lng: center.lon }, content: dot(null), title: 'Toi', zIndex: 1 })];
     for (const p of points) {
-      const m = new AdvancedMarkerElement({ map: map.current, position: { lat: p.lat, lng: p.lon }, content: dot(p), title: p.label, zIndex: p.saved ? 3 : 2 });
+      const m = new AdvancedMarkerElement({ map: map.current, position: { lat: p.lat, lng: p.lon }, content: dot(p, p.key === selected), title: p.label, zIndex: p.key === selected ? 5 : p.saved ? 3 : 2 });
       m.addListener('click', () => onSelect?.(p.key));
       markers.current.push(m);
     }
-  }, [status, points, center.lat, center.lon, onSelect]);
+  }, [status, points, selected, center.lat, center.lon, onSelect]);
 
   if (status === 'nokey' || status === 'error') {
     return (
