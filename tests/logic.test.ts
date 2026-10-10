@@ -142,3 +142,24 @@ describe('cuisines', () => {
     expect(a.quote.best!.chain.id).toBe('pt-continente');
   });
 });
+
+describe('dictionnaire multilingue', () => {
+  it('reconnaît un aliment sous ses noms français, portugais et anglais', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { setLexicon, exactLookup, searchLexicon, ingredientFromEntry } = await import('../src/lib/lexicon');
+    setLexicon(JSON.parse(readFileSync(new URL('../public/lexicon.json', import.meta.url), 'utf8')));
+    for (const name of ['artichaut', 'alcachofra', 'artichoke', 'Artichauts']) expect(exactLookup(name)?.id, name).toBe('artichoke');
+    expect(searchLexicon('alcachof')[0].id).toBe('artichoke');
+    const ing = ingredientFromEntry(exactLookup('alcachofra')!);
+    expect(ing).toMatchObject({ id: 'lex:artichoke', name: 'Artichaut', partial: true, aisle: 'fruits-legumes' });
+    // Un ingrédient qu'on connaît en détail garde sa nutrition.
+    expect(ingredientFromEntry(exactLookup('cebola')!).id).toBe('oignon');
+    // L'import d'une recette reconnaît l'ingrédient et ne l'invente pas dans le calcul nutritionnel.
+    expect(parseIngredientLine('4 artichauts violets')).toMatchObject({ ingredientId: 'lex:artichoke', qty: 4 });
+    expect(parseIngredientLine('2 alcachofras')).toMatchObject({ ingredientId: 'lex:artichoke' });
+    const r = fromSchemaRecipe({ name: 'Artichauts farcis', recipeYield: '2', recipeIngredient: ['4 artichauts', '2 c. à soupe d\'huile d\'olive'], recipeInstructions: ['Cuire.'] });
+    const a = adaptRecipe(r, profile(), []);
+    expect(a.nutrition.coverage).toBeLessThan(1);
+    expect(a.quote.unknown).toBe(1);
+  });
+});

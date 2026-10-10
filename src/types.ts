@@ -58,6 +58,8 @@ export interface Ingredient {
   subs?: string[];
   /** Considéré comme "fond de placard" (sel, poivre…). */
   staple?: boolean;
+  /** Reconnu par le dictionnaire multilingue mais sans nutrition ni prix de référence. */
+  partial?: boolean;
 }
 
 export type Unit = BaseUnit | 'kg' | 'cl' | 'l' | 'cas' | 'cac' | 'pincee' | 'gousse' | 'tranche' | 'botte' | 'sachet';

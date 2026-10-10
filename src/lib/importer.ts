@@ -1,5 +1,6 @@
-import { INGREDIENTS } from '../data/ingredients';
+import { getIngredient, INGREDIENTS } from '../data/ingredients';
 import { cuisineFromText } from '../data/reference';
+import { findInTextDetailed, ingredientFromEntry } from './lexicon';
 import type { Category, Equipment, Recipe, RecipeIngredient, Unit } from '../types';
 import { normalize, uid } from './text';
 
@@ -46,11 +47,19 @@ function getAliasIndex(): AliasEntry[] {
 
 export function matchIngredient(name: string): string | undefined {
   const n = ` ${normalize(name)} `;
+  let own: { id: string; words: number } | undefined;
   for (const { alias, id } of getAliasIndex()) {
     if (!alias) continue;
-    if (n.includes(` ${alias} `) || n.includes(` ${alias}s `)) return id;
+    if (n.includes(` ${alias} `) || n.includes(` ${alias}s `)) {
+      own = { id, words: alias.split(' ').length };
+      break;
+    }
   }
-  return undefined;
+  // Dictionnaire multilingue (artichaut, alcachofra, artichoke…) : il l'emporte quand son nom est plus long
+  // ("couve-flor" = chou-fleur, et non "couve" = chou kale).
+  const lex = findInTextDetailed(name);
+  if (lex && (!own || lex.words > own.words)) return ingredientFromEntry(lex.entry).id;
+  return own?.id;
 }
 
 // ---------- Analyse d'une ligne d'ingrédient ----------
@@ -111,7 +120,7 @@ export function parseIngredientLine(line: string): RecipeIngredient {
   }
   rest = rest.replace(/^(de |d |of |do |da |dos |das )/, '').trim();
   const ingredientId = matchIngredient(rest || raw);
-  const ing = ingredientId ? INGREDIENTS.find((i) => i.id === ingredientId) : undefined;
+  const ing = getIngredient(ingredientId);
   // "200 farine" sans unité pour un ingrédient au poids → grammes.
   if (ing && unit === 'pc' && qty != null && ing.unit !== 'pc' && qty >= 20) unit = ing.unit === 'ml' ? 'ml' : 'g';
   return {

@@ -1,0 +1,7 @@
+# Corrections des noms de la taxonomie : id <tab> portugais <tab> français <tab> anglais (séparer plusieurs noms par |).
+# Une colonne renseignée REMPLACE tous les noms de cette langue ; une colonne vide laisse la langue inchangée.
+coconut-milk	leite de coco	lait de coco
+coconut-cream	creme de coco	crème de coco
+herbes-de-provence	ervas de Provença	herbes de Provence
+feta	feta	feta
+chorizo	chouriço|chourição	chorizo

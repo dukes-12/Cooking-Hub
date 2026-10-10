@@ -57,6 +57,20 @@ Calculée à partir de la base d'ingrédients (valeurs pour 100 g, type Ciqual).
 - Si la localisation est refusée : saisie d'une ville ou d'un code postal (géocodage OpenStreetMap Nominatim).
 - En http sur l'IP locale (`http://192.168…:5173`), les navigateurs bloquent la géolocalisation : utilise l'URL Cloudflare.
 
+### Dictionnaire multilingue des aliments (français, portugais, anglais)
+`public/lexicon.json` (≈ 520 Ko, 100 Ko compressé) contient **3 423 aliments**, dont **2 955 avec leurs noms dans les 3 langues** ; il est chargé au démarrage et sert à :
+- reconnaître un ingrédient dans une recette importée sous n'importe quel nom (« artichaut », « alcachofra », « artichoke » → même ingrédient) ;
+- chercher dans le frigo et la liste de courses dans les 3 langues ;
+- classer l'aliment par rayon et lui donner ses étiquettes (gluten, lait, porc…) pour les régimes et allergies.
+
+Un ingrédient du dictionnaire sans fiche détaillée est « partiel » : il est reconnu et rangé, mais sans calories ni prix (fiabilité affichée plus bas dans la fiche recette). Les ≈ 110 ingrédients détaillés sont rattachés à leur entrée du dictionnaire.
+
+Régénérer : `npm run lexicon:build` (télécharge la taxonomie des ingrédients d'[Open Food Facts](https://github.com/openfoodfacts/openfoodfacts-server/tree/main/taxonomies/food) — **à citer comme source** ; la licence du contenu de la taxonomie reste à confirmer avant diffusion publique).
+- `scripts/lexicon-translations.csv` : ≈ 2 100 noms portugais et français **complétés par traduction (Claude), à relire** ; marqués `x` dans le dictionnaire.
+- `scripts/lexicon-corrections.tsv` : corrections d'erreurs de la source (ex. « Leite de cocô » → « leite de coco »).
+- Il reste ≈ 470 entrées (noms composés rares : « huile de palme hydrogénée »…) sans l'une des trois langues.
+- Les étiquettes de régime et d'allergènes sont déduites des catégories parentes : **indicatives**, pas une garantie.
+
 ### Agrandir le catalogue de recettes
 Les 26 recettes actuelles (`src/data/recipes.ts`) sont des classiques de la cuisine familiale, rédigés pour le prototype (pas copiés d'un site). Pour en ajouter en masse :
 

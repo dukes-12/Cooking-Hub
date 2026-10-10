@@ -146,8 +146,24 @@ export const INGREDIENTS: Ingredient[] = [
 
 export const INGREDIENT_BY_ID: Record<string, Ingredient> = Object.fromEntries(INGREDIENTS.map((i) => [i.id, i]));
 
+/** Résolveur des ingrédients du dictionnaire multilingue ("lex:artichoke"), branché par lib/lexicon.ts. */
+let lexResolver: ((id: string) => Ingredient | undefined) | null = null;
+export function registerLexiconResolver(fn: (id: string) => Ingredient | undefined) {
+  lexResolver = fn;
+}
+
 export function getIngredient(id: string | undefined): Ingredient | undefined {
-  return id ? INGREDIENT_BY_ID[id] : undefined;
+  if (!id) return undefined;
+  const own = INGREDIENT_BY_ID[id];
+  if (own || !id.startsWith('lex:')) return own;
+  // Dictionnaire pas encore chargé (hors-ligne, premier affichage) : on fabrique l'ingrédient depuis son identifiant.
+  const slug = id.slice(4);
+  return (
+    lexResolver?.(slug) ?? {
+      id, name: slug.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase()), aliases: [], aisle: 'divers', unit: 'g',
+      kcal: 0, protein: 0, carbs: 0, fat: 0, pricePerKg: 0, tags: [], partial: true,
+    }
+  );
 }
 
 export const AISLE_LABELS: Record<Aisle, { label: string; emoji: string; order: number }> = {

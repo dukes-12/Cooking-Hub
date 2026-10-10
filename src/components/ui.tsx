@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { INGREDIENTS } from '../data/ingredients';
+import { ingredientFromEntry, searchLexicon, useLexiconReady } from '../lib/lexicon';
 import { normalize } from '../lib/text';
 import type { Ingredient } from '../types';
 
@@ -84,10 +85,11 @@ export function Section({ title, action, children }: { title: string; action?: R
 /** Recherche d'ingrédient avec autocomplétion sur la base de référence. */
 export function IngredientPicker({ onPick, exclude = [], placeholder = 'Rechercher un ingrédient…', allowFree }: { onPick: (ing: Ingredient | null, text: string) => void; exclude?: string[]; placeholder?: string; allowFree?: boolean }) {
   const [q, setQ] = useState('');
+  const lexReady = useLexiconReady();
   const results = useMemo(() => {
     const n = normalize(q);
     if (!n) return [];
-    return INGREDIENTS.filter((i) => !exclude.includes(i.id))
+    const own = INGREDIENTS.filter((i) => !exclude.includes(i.id))
       .map((i) => {
         const names = [i.name, ...i.aliases].map(normalize);
         const rank = names.some((x) => x.startsWith(n)) ? 0 : names.some((x) => x.includes(n)) ? 1 : 2;
@@ -97,7 +99,13 @@ export function IngredientPicker({ onPick, exclude = [], placeholder = 'Recherch
       .sort((a, b) => a.rank - b.rank || a.i.name.localeCompare(b.i.name))
       .slice(0, 6)
       .map((x) => x.i);
-  }, [q, exclude]);
+    // Complète avec le dictionnaire multilingue (français, portugais, anglais) : "alcachofra" trouve l'artichaut.
+    const seen = new Set(own.map((i) => i.id));
+    const extra = (lexReady ? searchLexicon(q, 8) : [])
+      .map(ingredientFromEntry)
+      .filter((i) => !seen.has(i.id) && !exclude.includes(i.id));
+    return [...own, ...extra].slice(0, 8);
+  }, [q, exclude, lexReady]);
 
   const pick = (ing: Ingredient | null) => {
     onPick(ing, q.trim());
@@ -124,6 +132,7 @@ export function IngredientPicker({ onPick, exclude = [], placeholder = 'Recherch
           {results.map((r) => (
             <button key={r.id} type="button" onClick={() => pick(r)}>
               {r.name}
+              {r.partial && <span className="muted small"> · {[...new Set(r.aliases.map((a) => a.toLowerCase()))].filter((a) => a !== r.name.toLowerCase()).slice(0, 2).join(' · ')}</span>}
             </button>
           ))}
           {allowFree && q.trim() && (

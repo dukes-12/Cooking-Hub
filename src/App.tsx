@@ -8,6 +8,7 @@ import { RecipeDetail } from './screens/RecipeDetail';
 import { Search } from './screens/Search';
 import { Shopping, ShopMode } from './screens/Shopping';
 import { go, useRoute } from './router';
+import { useLexiconReady } from './lib/lexicon';
 import { useApp } from './state';
 
 const TABS = [
@@ -20,6 +21,7 @@ const TABS = [
 
 export function App() {
   const { state } = useApp();
+  useLexiconReady(); // réaffiche les écrans quand le dictionnaire multilingue est chargé
   const [page, param] = useRoute();
 
   if (!state.onboarded) return <div className="app"><Onboarding /></div>;

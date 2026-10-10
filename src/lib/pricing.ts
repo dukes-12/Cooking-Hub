@@ -20,7 +20,7 @@ export const estimatedProvider: PriceProvider = {
   label: 'Estimation (prix moyens × indice enseigne)',
   pricePerKg(ingredientId, chainId, country) {
     const ing = getIngredient(ingredientId);
-    if (!ing) return null;
+    if (!ing || ing.partial) return null;
     const base = ing.pricePerKg * getCountry(country).priceFactor;
     if (!chainId) return base;
     const chain = getChain(chainId);
@@ -71,7 +71,7 @@ export interface BasketQuote {
 
 export function quoteBasket(items: Basket[], profile: Profile): BasketQuote {
   const chains = userChains(profile);
-  const known = items.filter((it) => it.ingredientId && it.grams != null && getIngredient(it.ingredientId));
+  const known = items.filter((it) => it.ingredientId && it.grams != null && getIngredient(it.ingredientId) && !getIngredient(it.ingredientId)!.partial);
   const unknown = items.length - known.length;
   const matrix = known.map((it) => chains.map((c) => costOf(it.ingredientId, it.grams, c.id, profile.country) ?? 0));
   const perChain = chains

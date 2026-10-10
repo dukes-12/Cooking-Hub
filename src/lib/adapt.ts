@@ -188,7 +188,7 @@ export function adaptRecipe(
   // Nutrition (par portion)
   let kcal = 0, protein = 0, carbs = 0, fat = 0, known = 0;
   for (const l of active) {
-    if (!l.ingredient || l.grams == null) continue;
+    if (!l.ingredient || l.grams == null || l.ingredient.partial) continue;
     known++;
     const g = l.grams / 100;
     kcal += l.ingredient.kcal * g;
