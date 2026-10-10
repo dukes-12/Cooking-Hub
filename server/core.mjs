@@ -233,7 +233,9 @@ async function googleRefusal(res, what) {
     : res.status === 403 ? "Active « Places API (New) » dans Google Cloud et vérifie que la clé n'est pas restreinte à un autre service ni à un site web (cette clé-ci est utilisée par le serveur)."
     : res.status === 400 ? "Requête ou clé refusée : vérifie la clé et l'activation de « Places API (New) »."
     : '';
-  return `Google a refusé ${what} (${res.status} ${err.status ?? ''}). ${hint}`.trim();
+  // Le message de Google (sans la clé) dit précisément la cause : API désactivée, restriction de site, etc.
+  const detail = typeof err.message === 'string' ? ` Google : « ${err.message.slice(0, 220)} »` : '';
+  return `Google a refusé ${what} (${res.status} ${err.status ?? ''}). ${hint}${detail}`.trim();
 }
 
 export async function findStoresGoogle({ lat, lon, radiusM }, apiKey, fetchImpl = fetch) {
