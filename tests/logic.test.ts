@@ -437,7 +437,7 @@ describe('relevé des prix des enseignes portugaises', () => {
   it('enchaîne découverte, relevé et synthèse sur plusieurs passages', async () => {
     const { runScraper } = await import('../worker/scraper.js');
     const store = new Map<string, string>();
-    const kv = { get: async (k: string, t?: string) => (store.has(k) ? (t === 'json' ? JSON.parse(store.get(k)!) : store.get(k)) : null), put: async (k: string, v: string) => void store.set(k, v) };
+    const kv = { get: async (k: string, t?: string) => (store.has(k) ? (t === 'json' ? JSON.parse(store.get(k)!) : store.get(k)) : null), put: async (k: string, v: string) => void store.set(k, v), delete: async (k: string) => void store.delete(k) };
     const pages: Record<string, string> = {
       'https://www.continente.pt/sitemap_index.xml': '<sitemapindex><sitemap><loc>https://www.continente.pt/sitemap_1-product.xml</loc></sitemap><sitemap><loc>https://www.continente.pt/sitemap_2-image.xml</loc></sitemap></sitemapindex>',
       'https://www.continente.pt/sitemap_1-product.xml': '<urlset><url><loc>https://www.continente.pt/produto/arroz-agulha-continente-1.html</loc></url><url><loc>https://www.continente.pt/produto/arroz-agulha-cigala-2.html</loc></url><url><loc>https://www.continente.pt/produto/sumo-3.html</loc></url></urlset>',
@@ -460,6 +460,10 @@ describe('relevé des prix des enseignes portugaises', () => {
       expect(await runScraper(env, now)).toBe('rien à faire cette semaine');
       // Semaine suivante : pas de nouvelle découverte (moins de 4 semaines), on relève directement les prix.
       expect(await runScraper(env, new Date('2026-10-19T08:00:00Z'))).toContain('prices');
+      // Relance forcée : nouvelle découverte même en cours de semaine.
+      store.set('scrape:force', '1');
+      expect(await runScraper(env, new Date('2026-10-19T09:00:00Z'))).toContain('discover');
+      expect(store.has('scrape:force')).toBe(false);
     } finally {
       globalThis.fetch = orig;
     }

@@ -151,9 +151,13 @@ export async function runScraper(env, now = new Date()) {
   const state = await getJson(kv, 'scrape:state', { week: null, phase: 'idle' });
   const tracked = await getJson(kv, 'scrape:tracked', { at: 0, chains: {} });
 
+  // Relance manuelle d'un cycle complet (découverte comprise) : clé "scrape:force" posée dans KV.
+  const force = await kv.get('scrape:force');
+  if (force) await kv.delete('scrape:force');
+
   // Nouvelle semaine : on (re)découvre les produits si besoin, puis on relève les prix.
-  if (state.week !== week) {
-    const stale = !tracked.at || now - tracked.at > REDISCOVER_DAYS * 86400000;
+  if (state.week !== week || force) {
+    const stale = force || !tracked.at || now - tracked.at > REDISCOVER_DAYS * 86400000;
     const next = { week, phase: stale ? 'discover' : 'prices', sitemaps: null, queue: null, results: {}, log: [] };
     await kv.put('scrape:state', JSON.stringify(next));
     return `semaine ${week} : ${next.phase}`;
