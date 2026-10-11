@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { NewProductForm } from '../components/NewProduct';
+import { NewProductForm, ProductForm } from '../components/NewProduct';
 import { IngredientPicker, Sheet } from '../components/ui';
 import { nameFromLabel } from '../lib/custom';
 import { getIngredient } from '../data/ingredients';
@@ -129,10 +129,12 @@ export function ReceiptImport({ storeKey: presetKey }: { storeKey?: string }) {
 }
 
 function ReceiptReview({ draft, onChange, onCancel, onConfirm }: { draft: ReceiptDraft; onChange: (d: ReceiptDraft) => void; onCancel: () => void; onConfirm: (d: ReceiptDraft) => void }) {
-  const { state, actions } = useApp();
+  const { state } = useApp();
   const { receipt, newStore } = draft;
   const [picking, setPicking] = useState<string | null>(null);
   const [newProduct, setNewProduct] = useState<string | null>(null);
+  // Fiche du produit exact d'une ligne (photo, code-barres, valeurs nutritionnelles).
+  const [exact, setExact] = useState(false);
   const [newChain, setNewChain] = useState(newStore?.chainId ?? '');
   const [newName, setNewName] = useState(newStore?.label ?? '');
 
@@ -273,10 +275,13 @@ function ReceiptReview({ draft, onChange, onCancel, onConfirm }: { draft: Receip
                 <input className="input grow" value={l.label} placeholder="Libellé du ticket" onChange={(e) => setLine(l.id, { label: e.target.value })} aria-label="Libellé" />
                 <button className="icon-btn sm" onClick={() => setReceipt({ lines: receipt.lines.filter((x) => x.id !== l.id) })} aria-label="Supprimer la ligne">✕</button>
               </div>
-              <button className="ticket-product" onClick={() => setPicking(l.id)}>
-                {ing ? <>→ <b>{ing.name}</b>{ing.custom && <span className="badge badge-good">à moi</span>}</> : <span className="warn-text">⚠️ Associer ou créer un produit</span>}
-                <span className="small muted"> ✎</span>
-              </button>
+              <div className="row gap-sm">
+                <button className="ticket-product grow" onClick={() => setPicking(l.id)}>
+                  {ing ? <>→ <b>{ing.name}</b>{ing.custom && <span className="badge badge-good">à moi</span>}</> : <span className="warn-text">⚠️ Associer ou créer un produit</span>}
+                  <span className="small muted"> ✎</span>
+                </button>
+                <button className="icon-btn sm" onClick={() => { setPicking(l.id); setExact(true); }} aria-label="Fiche du produit exact (photo, valeurs nutritionnelles)" title="Produit exact : photo, code-barres, valeurs nutritionnelles">📸</button>
+              </div>
               <div className="ticket-fields">
                 <label>
                   <span className="small muted">Qté</span>
@@ -326,15 +331,26 @@ function ReceiptReview({ draft, onChange, onCancel, onConfirm }: { draft: Receip
         </button>
       </div>
 
-      <Sheet open={!!pickingLine} onClose={() => { setPicking(null); setNewProduct(null); }} title={newProduct != null ? 'Nouveau produit' : pickingLine ? `« ${pickingLine.label || 'Article'} »` : ''}>
-        {newProduct != null && pickingLine ? (
+      <Sheet open={!!pickingLine} onClose={() => { setPicking(null); setNewProduct(null); setExact(false); }} title={exact ? 'Produit exact' : newProduct != null ? 'Nouveau produit' : pickingLine ? `« ${pickingLine.label || 'Article'} »` : ''}>
+        {exact && pickingLine ? (
+          <ProductForm
+            key={`exact-${pickingLine.id}`}
+            editing={pickingLine.productId && getIngredient(pickingLine.productId)?.custom ? getIngredient(pickingLine.productId) : undefined}
+            seed={{ name: nameFromLabel(pickingLine.label), label: pickingLine.label, familyId: pickingLine.productId }}
+            onCancel={() => setExact(false)}
+            onDone={(ing) => {
+              setLine(pickingLine.id, { productId: ing.id, toFridge: true });
+              setExact(false);
+              setPicking(null);
+            }}
+          />
+        ) : newProduct != null && pickingLine ? (
           <NewProductForm
             key={pickingLine.id}
             initialName={newProduct}
             label={pickingLine.label}
             onCancel={() => setNewProduct(null)}
             onCreate={(ing) => {
-              actions.addCustomProduct(ing);
               setLine(pickingLine.id, { productId: ing.id, toFridge: true });
               setNewProduct(null);
               setPicking(null);
@@ -354,6 +370,9 @@ function ReceiptReview({ draft, onChange, onCancel, onConfirm }: { draft: Receip
               <button className="btn btn-soft btn-block" onClick={() => setNewProduct(nameFromLabel(pickingLine.label))}>
                 ＋ Nouveau produit « {nameFromLabel(pickingLine.label) || 'Article'} »
               </button>
+            )}
+            {pickingLine && (
+              <button className="btn btn-soft btn-block" onClick={() => setExact(true)}>📸 Produit exact : photo, code-barres, valeurs nutritionnelles</button>
             )}
             <p className="small muted">Nouveau dans l'appli ? Crée-le : il gardera ses prix et sera reconnu automatiquement sur tes prochains tickets.</p>
             {pickingLine?.productId && (

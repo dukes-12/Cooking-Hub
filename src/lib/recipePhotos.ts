@@ -1,4 +1,5 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useState } from 'react';
+import { deletePhoto, photoUrl, savePhoto, usePhotoVersion } from './photoStore';
 import { SEED_RECIPES } from '../data/recipes';
 import type { Recipe } from '../types';
 
@@ -20,70 +21,10 @@ export interface RecipePhoto {
   credit?: string;
 }
 
-// ---------- 1. Mes photos (IndexedDB) ----------
+// ---------- 1. Mes photos (IndexedDB, voir photoStore.ts) ----------
 
-const DB = 'cooking-hub-photos';
-const STORE = 'recipes';
-let version = 0;
-const listeners = new Set<() => void>();
-const urls = new Map<string, string | null>();
-
-function db(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB, 1);
-    req.onupgradeneeded = () => req.result.createObjectStore(STORE);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function tx<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
-  const d = await db();
-  return new Promise((resolve, reject) => {
-    const req = fn(d.transaction(STORE, mode).objectStore(STORE));
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-function changed(id: string) {
-  const old = urls.get(id);
-  if (old) URL.revokeObjectURL(old);
-  urls.delete(id);
-  version++;
-  listeners.forEach((l) => l());
-}
-
-/** Réduit la photo (1200 px, JPEG) et la garde pour cette recette. */
-export async function saveRecipePhoto(recipeId: string, file: File): Promise<void> {
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, 1200 / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-  canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  bitmap.close();
-  const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Photo illisible'))), 'image/jpeg', 0.85));
-  await tx('readwrite', (s) => s.put(blob, recipeId));
-  changed(recipeId);
-}
-
-export async function deleteRecipePhoto(recipeId: string): Promise<void> {
-  await tx('readwrite', (s) => s.delete(recipeId));
-  changed(recipeId);
-}
-
-async function myPhotoUrl(recipeId: string): Promise<string | null> {
-  if (urls.has(recipeId)) return urls.get(recipeId)!;
-  try {
-    const blob = await tx<Blob | undefined>('readonly', (s) => s.get(recipeId));
-    const url = blob ? URL.createObjectURL(blob) : null;
-    urls.set(recipeId, url);
-    return url;
-  } catch {
-    return null; // IndexedDB indisponible (navigation privée…)
-  }
-}
+export const saveRecipePhoto = (recipeId: string, file: File) => savePhoto('recipes', recipeId, file);
+export const deleteRecipePhoto = (recipeId: string) => deletePhoto('recipes', recipeId);
 
 // ---------- 3. Photo du plat sur Wikimedia Commons ----------
 
@@ -142,15 +83,12 @@ function dishPhoto(title: string): Promise<RecipePhoto | null> {
 // ---------- Choix de la photo ----------
 
 export function useRecipePhoto(recipe: Recipe): RecipePhoto | null {
-  const v = useSyncExternalStore(
-    (cb) => (listeners.add(cb), () => listeners.delete(cb)),
-    () => version,
-  );
+  const v = usePhotoVersion();
   const [photo, setPhoto] = useState<RecipePhoto | null>(recipe.image ? { url: recipe.image, kind: 'source' } : null);
   useEffect(() => {
     let alive = true;
     (async () => {
-      const mine = await myPhotoUrl(recipe.id);
+      const mine = await photoUrl('recipes', recipe.id);
       if (!alive) return;
       if (mine) return setPhoto({ url: mine, kind: 'mine' });
       if (recipe.image) return setPhoto({ url: recipe.image, kind: 'source' });

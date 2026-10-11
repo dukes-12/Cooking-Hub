@@ -218,6 +218,41 @@ export async function receiptFromPhotos(images, apiKey) {
   return { status: 200, body: { receipt: r.data } };
 }
 
+// ---------- Étiquette d'un produit (valeurs nutritionnelles) ----------
+
+const LABEL_PROMPT = `Ces photos montrent l'emballage d'un produit alimentaire (face avant, tableau des valeurs nutritionnelles, code-barres).
+Renvoie :
+- name : nom du produit en français (traduis s'il est en portugais ou en anglais), sans la marque ; brand : la marque ;
+- quantity : contenu du paquet (nombre) et quantityUnit (g, ml ou pc) ;
+- kcal, protein, carbs, fat : valeurs POUR 100 g (ou 100 ml) lues dans le tableau nutritionnel (énergie en kcal, pas en kJ) ;
+- barcode : les chiffres sous le code-barres s'ils sont lisibles.
+N'invente rien : si une valeur est illisible ou absente, mets null. found = false si ce n'est pas un produit alimentaire.`;
+
+const LABEL_SCHEMA = {
+  type: 'object',
+  properties: {
+    found: { type: 'boolean' },
+    name: nullable('string'),
+    brand: nullable('string'),
+    quantity: nullable('number'),
+    quantityUnit: { type: 'string', enum: ['g', 'ml', 'pc', 'none'] },
+    kcal: nullable('number'),
+    protein: nullable('number'),
+    carbs: nullable('number'),
+    fat: nullable('number'),
+    barcode: nullable('string'),
+  },
+  required: ['found', 'name', 'brand', 'quantity', 'quantityUnit', 'kcal', 'protein', 'carbs', 'fat', 'barcode'],
+  additionalProperties: false,
+};
+
+export async function labelFromPhotos(images, apiKey) {
+  const r = await readPhotosWithClaude(images, LABEL_PROMPT, LABEL_SCHEMA, apiKey, 'Étiquette');
+  if (!r.data) return r;
+  if (!r.data.found) return { status: 422, body: { error: 'Aucun produit alimentaire lisible sur la photo.' } };
+  return { status: 200, body: { label: r.data } };
+}
+
 // ---------- Magasins autour d'une position (Google Places API "New") ----------
 
 /**

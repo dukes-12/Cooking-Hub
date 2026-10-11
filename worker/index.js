@@ -1,6 +1,6 @@
 // Point d'entrée Cloudflare Workers : les routes /api/* passent par ici,
 // tout le reste (l'app compilée dans dist/) est servi directement comme fichiers statiques.
-import { findStoresGoogle, geocodeGoogle, importFromUrl, offCategory, offProduct, offUserAgent, openPrices, publicConfig, receiptFromPhotos, recipeFromPhotos } from '../server/core.mjs';
+import { findStoresGoogle, geocodeGoogle, importFromUrl, labelFromPhotos, offCategory, offProduct, offUserAgent, openPrices, publicConfig, receiptFromPhotos, recipeFromPhotos } from '../server/core.mjs';
 
 /** Réponses Open Food Facts / Open Prices gardées en cache (Cache API de Cloudflare) pour ménager leurs limites. */
 async function cached(request, ttlSeconds, compute) {
@@ -112,6 +112,16 @@ export default {
         return Response.json({ error: 'Requête invalide.' }, { status: 400 });
       }
       const { status, body } = await receiptFromPhotos(payload.images, env.ANTHROPIC_API_KEY);
+      return Response.json(body, { status });
+    }
+    if (url.pathname === '/api/label' && request.method === 'POST') {
+      let payload;
+      try {
+        payload = await request.json();
+      } catch {
+        return Response.json({ error: 'Requête invalide.' }, { status: 400 });
+      }
+      const { status, body } = await labelFromPhotos(payload.images, env.ANTHROPIC_API_KEY);
       return Response.json(body, { status });
     }
     if (url.pathname.startsWith('/api/')) {

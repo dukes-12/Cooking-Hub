@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Chip, Empty, Section } from '../components/ui';
+import { ProductForm } from '../components/NewProduct';
+import { Chip, Empty, Section, Sheet } from '../components/ui';
+import { useMyPhoto } from '../lib/photoStore';
 import { AISLE_LABELS, customIngredients, getIngredient } from '../data/ingredients';
 import { CHAINS, getChain, getCountry } from '../data/reference';
 import { productImage, type ProductImage } from '../lib/images';
@@ -23,6 +25,9 @@ export function Product({ id }: { id: string }) {
   const [img, setImg] = useState<ProductImage | null>(null);
   const [sort, setSort] = useState<'country' | 'price'>('country');
   const [flash, setFlash] = useState<string | null>(null);
+  // Fiche à modifier (mon produit) ou à créer (produit exact rattaché à celui-ci).
+  const [editor, setEditor] = useState<'edit' | 'exact' | null>(null);
+  const myPhoto = useMyPhoto('products', ing?.custom ? id : undefined);
   const [offProducts, setOffProducts] = useState<OffProduct[]>([]);
   const [online, setOnline] = useState<Record<string, [string, number][]>>({});
   const cv = useCommunityPrices() + useChainPrices();
@@ -97,10 +102,14 @@ export function Product({ id }: { id: string }) {
   return (
     <div className="screen product">
       <div className="product-hero">
-        {img ? <img src={img.url} alt={ing.name} referrerPolicy="no-referrer" /> : offImage ? <img src={offImage.image!} alt={ing.name} className="contain" referrerPolicy="no-referrer" /> : <span aria-hidden>{aisle.emoji}</span>}
+        {myPhoto ? <img src={myPhoto} alt={ing.name} /> : ing.image ? <img src={ing.image} alt={ing.name} className="contain" referrerPolicy="no-referrer" /> : img ? <img src={img.url} alt={ing.name} referrerPolicy="no-referrer" /> : offImage ? <img src={offImage.image!} alt={ing.name} className="contain" referrerPolicy="no-referrer" /> : <span aria-hidden>{aisle.emoji}</span>}
         <button className="icon-btn glass hero-back" onClick={() => back()} aria-label="Retour">←</button>
       </div>
-      {img ? (
+      {myPhoto ? (
+        <span className="small muted credit">Ma photo</span>
+      ) : ing.image ? (
+        <a className="small muted credit" href={ing.barcode ? offProductUrl(ing.barcode) : ing.image} target="_blank" rel="noreferrer">Photo : Open Food Facts (CC BY-SA)</a>
+      ) : img ? (
         <a className="small muted credit" href={img.credit} target="_blank" rel="noreferrer">Photo : Wikimedia Commons</a>
       ) : offImage ? (
         <a className="small muted credit" href={offProductUrl(offImage.code)} target="_blank" rel="noreferrer">Photo : Open Food Facts (CC BY-SA) · {offImage.name}</a>
@@ -113,8 +122,13 @@ export function Product({ id }: { id: string }) {
           <p className="small">
             <span className="badge badge-good">Mon produit</span>{' '}
             {ing.family && <button className="link" onClick={() => go(`/product/${encodeURIComponent(ing.family!)}`)}>Famille : {getIngredient(ing.family)?.name}</button>}
+            {ing.barcode && <span className="muted"> · ▥ {ing.barcode}</span>}
+            {ing.packQty ? <span className="muted"> · paquet de {ing.packQty} {ing.unit === 'pc' ? 'pièces' : ing.unit}</span> : null}
           </p>
         )}
+        <button className="btn btn-soft btn-sm" onClick={() => setEditor(ing.custom ? 'edit' : 'exact')}>
+          {ing.custom ? '✎ Modifier la fiche (photo, code-barres, nutrition)' : '📸 Ajouter mon produit exact (photo, code-barres, nutrition)'}
+        </button>
         {entry && <p className="small muted">🇵🇹 {lexName(entry, 'pt')} · 🇬🇧 {lexName(entry, 'en')}</p>}
       </div>
 
@@ -134,7 +148,7 @@ export function Product({ id }: { id: string }) {
 
       <div className="row gap">
         <button className="btn btn-soft grow" onClick={() => { actions.addShopping(manualItem(ing.name, ing.id)); say('Ajouté aux courses'); }}>🛒 Aux courses</button>
-        <button className="btn btn-soft grow" onClick={() => { actions.addFridge(ing.id, ing.unit === 'pc' ? 1 : 250); say('Ajouté au frigo'); }}>🧊 Au frigo</button>
+        <button className="btn btn-soft grow" onClick={() => { actions.addFridge(ing.id, ing.packQty ?? (ing.unit === 'pc' ? 1 : 250)); say('Ajouté au frigo'); }}>🧊 Au frigo</button>
       </div>
 
       {!ing.partial ? (
@@ -313,6 +327,20 @@ export function Product({ id }: { id: string }) {
           <div className="chips">{used.slice(0, 10).map((r) => <Chip key={r.id} onClick={() => go(`/recipe/${r.id}`)}>{r.emoji} {r.title}</Chip>)}</div>
         </Section>
       )}
+      <Sheet open={editor != null} onClose={() => setEditor(null)} title={editor === 'edit' ? 'Modifier la fiche' : 'Mon produit exact'}>
+        {editor && (
+          <ProductForm
+            editing={editor === 'edit' ? ing : undefined}
+            seed={editor === 'exact' ? { familyId: ing.id } : undefined}
+            onCancel={() => setEditor(null)}
+            onDone={(saved) => {
+              setEditor(null);
+              if (saved.id !== id) go(`/product/${encodeURIComponent(saved.id)}`);
+              else say('Fiche enregistrée');
+            }}
+          />
+        )}
+      </Sheet>
       {flash && <div className="toast">{flash}</div>}
     </div>
   );

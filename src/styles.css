@@ -415,3 +415,11 @@ div.ticket > .ticket-line.is-unmatched { border-left-color: var(--warn); }
 .source-badge { font-weight: 600; } .source-badge.is-link { color: var(--primary); text-decoration: none; } .source-badge.is-link:hover { text-decoration: underline; }
 .product-list .product-emoji { font-size: 1.3rem; width: 1.8rem; text-align: center; flex: none; } .nowrap { white-space: nowrap; } .sort-select { width: auto; padding: 0.35rem 0.6rem; font-size: 0.85rem; } .product-list .badge { margin-left: 0.4rem; }
 .hero-actions { gap: 0.5rem; } .hero-actions .push-right { margin-left: auto; }
+
+/* Fiche de mon produit : photo, code-barres, valeurs nutritionnelles */
+.photo-pick { display: flex; align-items: center; gap: 0.8rem; }
+.photo-pick > img, .photo-pick > span { width: 84px; height: 84px; border-radius: 12px; object-fit: contain; background: var(--surface-2); flex: none; display: inline-flex; align-items: center; justify-content: center; font-size: 2rem; }
+.photo-pick .btn { margin-bottom: 0.3rem; }
+.nutri-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; margin-bottom: 0.4rem; }
+.nutri-grid label { display: flex; flex-direction: column; gap: 0.15rem; }
+.product-emoji img { width: 1.8rem; height: 1.8rem; object-fit: cover; border-radius: 6px; display: block; }

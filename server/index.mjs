@@ -9,7 +9,7 @@ import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { findStoresGoogle, geocodeGoogle, importFromUrl, offCategory, offProduct, offUserAgent, openPrices, publicConfig, receiptFromPhotos, recipeFromPhotos } from './core.mjs';
+import { findStoresGoogle, geocodeGoogle, importFromUrl, labelFromPhotos, offCategory, offProduct, offUserAgent, openPrices, publicConfig, receiptFromPhotos, recipeFromPhotos } from './core.mjs';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const DIST = fileURLToPath(new URL('../dist/', import.meta.url));
@@ -80,6 +80,16 @@ const server = createServer(async (req, res) => {
   }
   if (url.pathname === '/api/import') {
     const { status, body } = await importFromUrl(url.searchParams.get('url'));
+    return json(res, status, body);
+  }
+  if (url.pathname === '/api/label' && req.method === 'POST') {
+    let payload;
+    try {
+      payload = await readJson(req);
+    } catch {
+      return json(res, 400, { error: 'Requête invalide ou photos trop lourdes.' });
+    }
+    const { status, body } = await labelFromPhotos(payload.images, process.env.ANTHROPIC_API_KEY);
     return json(res, status, body);
   }
   if (url.pathname === '/api/receipt' && req.method === 'POST') {

@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { getIngredient } from '../data/ingredients';
+import { customByBarcode } from '../lib/custom';
+import { useMyPhoto } from '../lib/photoStore';
 import { fetchProductByCode, offProductUrl, type OffProduct } from '../lib/off';
 import { ingredientForCategories } from '../lib/openprices';
 import { gramsToBase } from '../lib/units';
 import type { Ingredient } from '../types';
+import { ProductForm, type ProductSeed } from './NewProduct';
 import { IngredientPicker, Sheet } from './ui';
 
 import { getBarcodeDetector, readBarcodeFromFile } from '../lib/barcode';
@@ -19,6 +22,9 @@ export function packQuantity(p: OffProduct, ing: Ingredient): number {
   return Math.round(gramsToBase(ing, 250));
 }
 
+/** Quantité d'un paquet de mon produit (contenu noté sur sa fiche, sinon 250 g ou 1 pièce). */
+const myPackQuantity = (ing: Ingredient) => ing.packQty ?? (ing.unit === 'pc' ? 1 : Math.round(gramsToBase(ing, 250)));
+
 /** Recherche d'un produit emballé par son code-barres (Open Food Facts) : scan caméra si le navigateur le permet, sinon saisie. */
 export function BarcodeSheet({ open, onClose, onAdd, onOpenProduct }: { open: boolean; onClose: () => void; onAdd: (ingredientId: string, qty: number) => void; onOpenProduct: (ingredientId: string) => void }) {
   const [code, setCode] = useState('');
@@ -27,6 +33,11 @@ export function BarcodeSheet({ open, onClose, onAdd, onOpenProduct }: { open: bo
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
+  // Mon produit portant ce code, code inconnu d'Open Food Facts, fiche en cours de création.
+  const [mine, setMine] = useState<Ingredient | null>(null);
+  const [unknown, setUnknown] = useState<string | null>(null);
+  const [form, setForm] = useState<ProductSeed | null>(null);
+  const minePhoto = useMyPhoto('products', mine?.id);
   const video = useRef<HTMLVideoElement>(null);
 
   const reset = () => {
@@ -34,19 +45,27 @@ export function BarcodeSheet({ open, onClose, onAdd, onOpenProduct }: { open: bo
     setIngId(undefined);
     setError(null);
     setCode('');
+    setMine(null);
+    setUnknown(null);
+    setForm(null);
   };
 
   const lookup = async (c: string) => {
     const clean = c.replace(/\D/g, '');
     if (clean.length < 6) return setError('Code-barres trop court.');
-    setLoading(true);
     setError(null);
+    setUnknown(null);
+    // Déjà dans mes produits : on ouvre ma fiche.
+    const own = customByBarcode(clean);
+    if (own) return setMine(own);
+    setLoading(true);
     try {
       const p = await fetchProductByCode(clean);
       setProduct(p);
       setIngId(ingredientForCategories(p.categories));
     } catch (e) {
       setError((e as Error).message);
+      setUnknown(clean);
     } finally {
       setLoading(false);
     }
@@ -98,8 +117,33 @@ export function BarcodeSheet({ open, onClose, onAdd, onOpenProduct }: { open: bo
   };
 
   return (
-    <Sheet open={open} onClose={close} title="Produit par code-barres">
-      {!product ? (
+    <Sheet open={open} onClose={close} title={form ? 'Ma fiche produit' : 'Produit par code-barres'}>
+      {form ? (
+        <ProductForm
+          seed={form}
+          onCancel={() => setForm(null)}
+          onDone={(ing) => {
+            setForm(null);
+            setProduct(null);
+            setMine(ing);
+          }}
+        />
+      ) : mine ? (
+        <>
+          <div className="off-item">
+            {minePhoto || mine.image ? <img src={minePhoto ?? mine.image} alt="" referrerPolicy="no-referrer" /> : <span className="off-noimg">📦</span>}
+            <span className="grow">
+              <b>{mine.name}</b> <span className="badge badge-good">à moi</span>
+              <span className="small muted block">{mine.partial ? 'sans valeurs nutritionnelles' : `${mine.kcal} kcal · ${mine.protein} g prot. pour 100 ${mine.unit === 'ml' ? 'ml' : 'g'}`}</span>
+            </span>
+          </div>
+          <div className="row gap">
+            <button className="btn btn-primary grow" onClick={() => { onAdd(mine.id, myPackQuantity(mine)); close(); }}>🧊 Ajouter au frigo</button>
+            <button className="btn btn-soft grow" onClick={() => { onOpenProduct(mine.id); close(); }}>Fiche produit</button>
+          </div>
+          <button className="link small" onClick={reset}>Autre code</button>
+        </>
+      ) : !product ? (
         <>
           {scanning && <video ref={video} className="scan-video" playsInline muted />}
           {canScan && !scanning && <button className="btn btn-primary btn-block" onClick={() => setScanning(true)}>📷 Scanner le code-barres</button>}
@@ -137,6 +181,9 @@ export function BarcodeSheet({ open, onClose, onAdd, onOpenProduct }: { open: bo
           </div>
           {!canScan && <p className="small muted">Caméra indisponible ici (il faut l'adresse https de l'appli) : prends une photo ou tape les chiffres écrits sous le code.</p>}
           {error && <p className="small warn-text">{error}</p>}
+          {unknown && (
+            <button className="btn btn-soft btn-block" onClick={() => setForm({ barcode: unknown })}>✚ Créer ma fiche pour ce code (photo, valeurs nutritionnelles)</button>
+          )}
         </>
       ) : (
         <>
@@ -154,6 +201,7 @@ export function BarcodeSheet({ open, onClose, onAdd, onOpenProduct }: { open: bo
             <button className="btn btn-primary grow" disabled={!ing} onClick={() => { onAdd(ing!.id, packQuantity(product, ing!)); close(); }}>🧊 Ajouter au frigo</button>
             <button className="btn btn-soft grow" disabled={!ing} onClick={() => { onOpenProduct(ing!.id); close(); }}>Fiche produit</button>
           </div>
+          <button className="btn btn-ghost btn-block" onClick={() => setForm({ barcode: product.code, off: product, familyId: ingId })}>✚ Créer ma fiche de ce produit (ma photo, ses valeurs nutritionnelles)</button>
           <div className="row between small">
             <button className="link" onClick={reset}>Autre code</button>
             <a className="link" href={offProductUrl(product.code)} target="_blank" rel="noreferrer">Voir sur Open Food Facts</a>

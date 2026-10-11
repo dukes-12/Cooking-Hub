@@ -4,6 +4,7 @@ import { AISLE_LABELS, customIngredients, INGREDIENTS } from '../data/ingredient
 import { useChainPrices } from '../lib/chainprices';
 import { ingredientFromEntry, searchLexicon, useLexiconReady } from '../lib/lexicon';
 import { loadCommunityPrices, useCommunityPrices } from '../lib/openprices';
+import { useMyPhoto } from '../lib/photoStore';
 import { fmtMoney } from '../lib/pricing';
 import { priceUnitLabel, pricesEverywhere, pricesInMyStores, type StorePrice } from '../lib/products';
 import { storeTitle } from '../lib/stores';
@@ -91,7 +92,7 @@ export function Products() {
         <div className="price-table product-list">
           {rows.slice(0, 200).map(({ ing, best, count }) => (
             <button key={ing.id} className="price-row" onClick={() => go(`/product/${encodeURIComponent(ing.id)}`)}>
-              <span className="product-emoji" aria-hidden>{AISLE_LABELS[ing.aisle].emoji}</span>
+              <ProductThumb ing={ing} />
               <span className="grow">
                 {ing.name}
                 {ing.custom && <span className="badge badge-good">à moi</span>}
@@ -108,4 +109,11 @@ export function Products() {
       {rows.length > 200 && <p className="small muted center">Affine la recherche pour voir les autres produits.</p>}
     </>
   );
+}
+
+/** Vignette d'un produit : ma photo ou celle du paquet pour mes produits, sinon l'émoji du rayon. */
+function ProductThumb({ ing }: { ing: Ingredient }) {
+  const mine = useMyPhoto('products', ing.custom ? ing.id : undefined);
+  const src = mine ?? ing.image;
+  return <span className="product-emoji" aria-hidden>{src ? <img src={src} alt="" referrerPolicy="no-referrer" /> : AISLE_LABELS[ing.aisle].emoji}</span>;
 }

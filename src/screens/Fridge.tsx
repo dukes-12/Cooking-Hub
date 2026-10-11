@@ -68,7 +68,6 @@ export function Fridge() {
             initialName={newProduct}
             onCancel={() => setNewProduct(null)}
             onCreate={(ing) => {
-              actions.addCustomProduct(ing);
               setNewProduct(null);
               open(ing);
             }}

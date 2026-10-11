@@ -372,6 +372,22 @@ describe('produits personnels', () => {
     expect(categoryFor(herbs.id)).toBe(categoryFor('herbes-provence'));
     setCustomIngredients([]);
   });
+
+  it('produit exact : code-barres, contenu et valeurs nutritionnelles du paquet', async () => {
+    const { customByBarcode, makeCustomProduct } = await import('../src/lib/custom');
+    const { setCustomIngredients } = await import('../src/data/ingredients');
+    const { estimatedProvider } = await import('../src/lib/pricing');
+    const yaourt = makeCustomProduct({ name: 'Iogurte grego Milbona', aisle: 'divers', unit: 'pc', familyId: 'herbes-provence', barcode: '5601312000017', packQty: 500, nutrition: { kcal: 97, protein: 9, carbs: 4, fat: 5 } });
+    expect(yaourt).toMatchObject({ kcal: 97, protein: 9, partial: false, barcode: '5601312000017', packQty: 500, family: 'herbes-provence' });
+    const nu = makeCustomProduct({ name: 'Bolachas', aisle: 'epicerie', unit: 'g', nutrition: { kcal: 480, protein: 6, carbs: 70, fat: 20 } });
+    expect(nu.partial).toBe(false);
+    // Sans prix de référence : pas d'estimation à 0 €.
+    expect(estimatedProvider.pricePerKg(nu.id, null, 'PT')).toBeNull();
+    setCustomIngredients([yaourt, nu]);
+    expect(customByBarcode('5601312 000017')?.id).toBe(yaourt.id);
+    expect(customByBarcode('123')).toBeUndefined();
+    setCustomIngredients([]);
+  });
 });
 
 describe('comparatif des magasins', () => {

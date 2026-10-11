@@ -64,6 +64,12 @@ export interface Ingredient {
   custom?: boolean;
   /** Grande famille de rattachement (ex. un sachet d'herbes de marque → "herbes-provence"). */
   family?: string;
+  /** Code-barres du produit exact (produit personnel). */
+  barcode?: string;
+  /** Photo du paquet sur Open Food Facts (ma propre photo est gardée sur l'appareil). */
+  image?: string;
+  /** Contenu du paquet, dans l'unité du produit (g, ml ou pièces). */
+  packQty?: number;
 }
 
 export type Unit = BaseUnit | 'kg' | 'cl' | 'l' | 'cas' | 'cac' | 'pincee' | 'gousse' | 'tranche' | 'botte' | 'sachet';
