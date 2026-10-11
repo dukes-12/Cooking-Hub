@@ -4,10 +4,11 @@ import { Empty, Stepper } from '../components/ui';
 import { quoteBasket, fmtMoney } from '../lib/pricing';
 import { go } from '../router';
 import { useApp } from '../state';
+import { RecipeFinder } from './Search';
 import type { Match } from '../lib/adapt';
 import { adaptRecipe } from '../lib/adapt';
 
-type Tab = 'menu' | 'favorites' | 'imported';
+type Tab = 'menu' | 'favorites' | 'imported' | 'all';
 
 export function Menu() {
   const { state, actions, recipes } = useApp();
@@ -34,6 +35,7 @@ export function Menu() {
         <button className={tab === 'menu' ? 'is-active' : ''} onClick={() => setTab('menu')}>Au menu {state.menu.length ? `(${state.menu.length})` : ''}</button>
         <button className={tab === 'favorites' ? 'is-active' : ''} onClick={() => setTab('favorites')}>Favoris {state.favorites.length ? `(${state.favorites.length})` : ''}</button>
         <button className={tab === 'imported' ? 'is-active' : ''} onClick={() => setTab('imported')}>Importées</button>
+        <button className={tab === 'all' ? 'is-active' : ''} onClick={() => setTab('all')}>Toutes</button>
       </div>
 
       {tab === 'menu' && (
@@ -84,6 +86,8 @@ export function Menu() {
           </Empty>
         )
       )}
+
+      {tab === 'all' && <RecipeFinder browse />}
 
       {tab === 'imported' && (
         <>
