@@ -18,7 +18,7 @@ export const CHAINS = [
 ];
 const UA = 'CookingHubBot/1.0 (+https://cooking-hub.kronogame.workers.dev; relevé de prix hebdomadaire, quelques pages par heure)';
 const PER_INGREDIENT = 4; // produits suivis par ingrédient et par enseigne
-const PAGES_PER_RUN = 12;
+const PAGES_PER_RUN = 6;
 const URLS_PER_RUN = 600; // adresses de sitemap traitées par passage (les gros sitemaps sont lus en plusieurs fois)
 const REDISCOVER_DAYS = 28;
 const PT_FACTOR = 0.9; // indice de prix du Portugal (src/data/reference.ts)
@@ -216,6 +216,39 @@ const median = (v) => {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 };
 
+const PRICE_MARKERS = ['ct-pdp--prices', 'auc-measures--price-per-unit', 'auc-pdp__price', 'product-unit-measure', 'class="prices"'];
+
+/**
+ * Page produit lue seulement jusqu'au bloc de prix (+ 3000 caractères) : les pages Continente pèsent ~1,6 Mo
+ * et en lire une douzaine en entier dépasse les limites d'un passage.
+ */
+export async function fetchProductHead(url, maxBytes = 2_500_000) {
+  const res = await fetch(url, { headers: { 'User-Agent': UA, 'Accept-Language': 'pt-PT,pt;q=0.9' }, signal: AbortSignal.timeout(20000) });
+  if (!res.ok || !res.body) throw new Error(`${res.status}`);
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let text = '';
+  let bytes = 0;
+  let foundAt = -1;
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    bytes += value.length;
+    text += decoder.decode(value, { stream: true });
+    if (foundAt < 0) {
+      for (const m of PRICE_MARKERS) {
+        const i = text.indexOf(m, Math.max(0, text.length - value.length - 64));
+        if (i >= 0 && (foundAt < 0 || i < foundAt)) foundAt = i;
+      }
+    }
+    if ((foundAt >= 0 && text.length > foundAt + 3000) || bytes > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      break;
+    }
+  }
+  return text;
+}
+
 async function fetchText(url) {
   const res = await fetch(url, { headers: { 'User-Agent': UA, 'Accept-Language': 'pt-PT,pt;q=0.9' }, signal: AbortSignal.timeout(20000) });
   if (!res.ok) throw new Error(`${res.status}`);
@@ -363,6 +396,12 @@ export async function runScraper(env, now = new Date()) {
   }
 
   if (state.phase === 'prices') {
+    // Relecture des pages d'une enseigne dans le cycle en cours : clé KV "scrape:requeue" = identifiant de l'enseigne.
+    const requeue = await kv.get('scrape:requeue');
+    if (requeue && state.queue) {
+      await kv.delete('scrape:requeue');
+      for (const [id, urls] of Object.entries(tracked.chains[requeue] ?? {})) for (const url of urls) state.queue.push({ chain: requeue, id, url });
+    }
     if (!state.queue) {
       state.queue = [];
       for (const [chain, byId] of Object.entries(tracked.chains)) for (const [id, urls] of Object.entries(byId)) for (const url of urls) state.queue.push({ chain, id, url });
@@ -375,7 +414,7 @@ export async function runScraper(env, now = new Date()) {
     await kv.put('scrape:state', JSON.stringify(state));
     for (const { chain, id, url } of batch) {
       try {
-        const v = toPerKg(id, parseProductPage(await fetchText(url), url));
+        const v = toPerKg(id, parseProductPage(await fetchProductHead(url), url));
         if (v != null) ((state.results[chain] ??= {})[id] ??= []).push(v);
       } catch (e) {
         if (state.log.length < 50) state.log.push(`${url}: ${e.message}`);

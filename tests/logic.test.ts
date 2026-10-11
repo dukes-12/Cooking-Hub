@@ -588,3 +588,20 @@ describe('lecture des sitemaps à partir d’un octet', () => {
     expect(seen.size).toBe(50);
   });
 });
+
+describe('lecture partielle des pages produit', () => {
+  it('s’arrête peu après le bloc de prix', async () => {
+    const { fetchProductHead, parseProductPage } = await import('../worker/scraper.js');
+    const page = '<html>' + 'x'.repeat(50000) + '<div class="ct-pdp--prices"><span>1,19&euro;/kg</span></div>\n' + 'y'.repeat(200000) + '</html>';
+    let sent = 0;
+    const orig = globalThis.fetch;
+    globalThis.fetch = (async () => new Response(new ReadableStream({ pull(c) { if (sent >= page.length) return c.close(); c.enqueue(new TextEncoder().encode(page.slice(sent, sent + 8192))); sent += 8192; } }))) as typeof fetch;
+    try {
+      const html = await fetchProductHead('https://www.continente.pt/produto/banana-continente-1.html');
+      expect(html.length).toBeLessThan(80000);
+      expect(parseProductPage(html, 'https://www.continente.pt/produto/banana-continente-1.html')).toEqual({ perKg: 1.19 });
+    } finally {
+      globalThis.fetch = orig;
+    }
+  });
+});
