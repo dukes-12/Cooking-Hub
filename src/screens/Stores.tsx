@@ -12,21 +12,22 @@ import { mapsLink, REFERENCE_BASKET, storeKey, storeTitle } from '../lib/stores'
 import { uid } from '../lib/text';
 import { go } from '../router';
 import { useApp } from '../state';
+import { Products } from './Products';
 import { TicketStoreSelect } from './StoreDetail';
 import type { ChosenStore } from '../types';
 
-type Tab = 'mine' | 'map' | 'compare';
+export type Tab = 'mine' | 'map' | 'compare' | 'products';
 
 /** Prix du panier type dans une enseigne (relevés de tickets prioritaires, sinon estimation). */
 export function basketTotal(chainId: string, country: string): number {
   return REFERENCE_BASKET.reduce((s, b) => s + (costOf(b.id, b.grams, chainId, country) ?? 0), 0);
 }
 
-export function Stores() {
+export function Stores({ initialTab }: { initialTab?: Tab } = {}) {
   useChainPrices();
   useCommunityPrices(); // le panier type se met à jour quand les prix Open Prices arrivent
   const { state } = useApp();
-  const [tab, setTab] = useState<Tab>(state.profile.stores.length ? 'mine' : 'map');
+  const [tab, setTab] = useState<Tab>(initialTab ?? (state.profile.stores.length ? 'mine' : 'map'));
   return (
     <div className="screen">
       <header className="screen-head">
@@ -37,13 +38,15 @@ export function Stores() {
         <button className="btn btn-primary btn-sm" onClick={() => go('/receipt')}>🧾 Ajouter un ticket</button>
       </header>
       <div className="segmented">
-        <button className={tab === 'mine' ? 'is-active' : ''} onClick={() => setTab('mine')}>Mes magasins</button>
+        <button className={tab === 'mine' ? 'is-active' : ''} onClick={() => setTab('mine')}>Magasins</button>
         <button className={tab === 'map' ? 'is-active' : ''} onClick={() => setTab('map')}>Carte</button>
         <button className={tab === 'compare' ? 'is-active' : ''} onClick={() => setTab('compare')}>Comparer</button>
+        <button className={tab === 'products' ? 'is-active' : ''} onClick={() => setTab('products')}>Produits</button>
       </div>
       {tab === 'mine' && <MyStores onMap={() => setTab('map')} />}
       {tab === 'map' && <MapTab />}
       {tab === 'compare' && <Compare />}
+      {tab === 'products' && <Products />}
     </div>
   );
 }

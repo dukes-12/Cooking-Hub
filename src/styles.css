@@ -413,3 +413,4 @@ div.ticket > .ticket-line.is-unmatched { border-left-color: var(--warn); }
 .viz-table th:first-child, .viz-table td:first-child { text-align: left; }
 .source-steps { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 0.6rem; }
 .source-badge { font-weight: 600; } .source-badge.is-link { color: var(--primary); text-decoration: none; } .source-badge.is-link:hover { text-decoration: underline; }
+.product-list .product-emoji { font-size: 1.3rem; width: 1.8rem; text-align: center; flex: none; } .nowrap { white-space: nowrap; } .sort-select { width: auto; padding: 0.35rem 0.6rem; font-size: 0.85rem; } .product-list .badge { margin-left: 0.4rem; }

@@ -59,6 +59,7 @@ export function App() {
     case 'profile': screen = <Profile />; break;
     case 'import': screen = <Import />; break;
     case 'stores': screen = <Stores />; break;
+    case 'products': screen = <Stores key="products" initialTab="products" />; break;
     case 'store': screen = <StoreDetail key={param} storeKey={param ?? ''} />; break;
     case 'product': screen = <Product key={param} id={param ?? ''} />; break;
     case 'receipt': screen = <ReceiptImport key={param} storeKey={param} />; break;
@@ -73,7 +74,7 @@ export function App() {
       {showTabs && (
         <nav className="tabbar">
           {TABS.map((t) => (
-            <button key={t.id} className={page === t.id || (t.id === 'discover' && (page === 'profile' || page === 'search')) || (t.id === 'stores' && page === 'store') ? 'is-active' : ''} onClick={() => go('/' + t.id)}>
+            <button key={t.id} className={page === t.id || (t.id === 'discover' && (page === 'profile' || page === 'search')) || (t.id === 'stores' && (page === 'store' || page === 'products')) ? 'is-active' : ''} onClick={() => go('/' + t.id)}>
               <span className="tab-icon">{t.icon}{t.id === 'shopping' && pendingShopping > 0 && <i className="tab-badge">{pendingShopping}</i>}</span>
               <span>{t.label}</span>
             </button>
