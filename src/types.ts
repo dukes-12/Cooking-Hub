@@ -107,6 +107,8 @@ export interface Recipe {
   ingredients: RecipeIngredient[];
   steps: string[];
   source?: { name: string; url?: string };
+  /** Recette récoltée sans le texte des étapes (restées sur le site source) : leur nombre. */
+  stepCount?: number;
   /** kcal/portion fournies par la source (prioritaires sur l'estimation). */
   sourceKcal?: number;
   imported?: boolean;

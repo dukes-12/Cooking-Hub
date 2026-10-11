@@ -296,3 +296,25 @@ export async function importFromPhotos(files: File[]): Promise<Recipe> {
   recipe.source = { name: 'Photo' };
   return recipe;
 }
+
+/** Identifiant stable tiré de l'adresse (les favoris et le menu survivent au rechargement du catalogue). */
+function stableId(url: string): string {
+  let h = 5381;
+  for (let i = 0; i < url.length; i++) h = ((h << 5) + h + url.charCodeAt(i)) | 0;
+  return `web-${(h >>> 0).toString(36)}`;
+}
+
+/**
+ * Recette récoltée par le Worker (fiche sans les étapes) → recette Cooking Hub.
+ * Écartée si moins de 60 % de ses ingrédients sont reconnus (prix et calories seraient trop approximatifs).
+ */
+export function fromHarvestedRecipe(r: Record<string, unknown> & { url: string; source: string; stepCount?: number }): Recipe | null {
+  try {
+    const rec = fromSchemaRecipe(r, r.url, r.source);
+    const known = rec.ingredients.filter((i) => i.ingredientId).length;
+    if (!rec.ingredients.length || known / rec.ingredients.length < 0.6) return null;
+    return { ...rec, id: stableId(r.url), imported: false, steps: [], stepCount: r.stepCount ?? undefined };
+  } catch {
+    return null;
+  }
+}

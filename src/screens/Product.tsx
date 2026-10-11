@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Chip, Empty, Section } from '../components/ui';
 import { AISLE_LABELS, customIngredients, getIngredient } from '../data/ingredients';
-import { getChain, getCountry } from '../data/reference';
+import { CHAINS, getChain, getCountry } from '../data/reference';
 import { productImage, type ProductImage } from '../lib/images';
 import { entryForProduct, lexName, useLexiconReady } from '../lib/lexicon';
 import { fetchCategoryProducts, medianNutrition, offProductUrl, type OffProduct } from '../lib/off';
-import { useChainPrices } from '../lib/chainprices';
+import { fetchChainHistory, useChainPrices, weekStart } from '../lib/chainprices';
+import { PriceHistoryChart, type HistorySeries } from '../components/PriceHistoryChart';
 import { categoryFor, communityStats, loadCommunityPrices, useCommunityPrices } from '../lib/openprices';
 import { fmtMoney } from '../lib/pricing';
 import { dietNotes, highlights, priceUnitLabel, pricesEverywhere, pricesInMyStores, recipesUsing } from '../lib/products';
@@ -23,6 +24,7 @@ export function Product({ id }: { id: string }) {
   const [sort, setSort] = useState<'country' | 'price'>('country');
   const [flash, setFlash] = useState<string | null>(null);
   const [offProducts, setOffProducts] = useState<OffProduct[]>([]);
+  const [online, setOnline] = useState<Record<string, [string, number][]>>({});
   const cv = useCommunityPrices() + useChainPrices();
   const country = state.profile.country;
   const cat = categoryFor(id);
@@ -32,6 +34,8 @@ export function Product({ id }: { id: string }) {
     loadCommunityPrices([id], country);
     let alive = true;
     if (cat) fetchCategoryProducts(cat, country).then((list) => alive && setOffProducts(list));
+    // Historique des prix en ligne (produit personnel : celui de sa famille).
+    fetchChainHistory(getIngredient(id)?.family ?? id, country).then((h) => alive && setOnline(h));
     return () => {
       alive = false;
     };
@@ -60,6 +64,16 @@ export function Product({ id }: { id: string }) {
   const offNutrition = useMemo(() => medianNutrition(offProducts), [offProducts]);
   // Pas de photo Wikimedia : celle du produit le plus scanné du rayon (Open Food Facts).
   const offImage = offProducts.find((p) => p.image);
+
+  // Évolution des prix : une ligne par enseigne (tes enseignes d'abord, 4 au plus, ordre fixe), tes achats en points.
+  const historySeries = useMemo<HistorySeries[]>(() => {
+    const mineChains = new Set(state.profile.stores.map((s) => s.chainId));
+    const chains = CHAINS.filter((c) => online[c.id]?.length).sort((a, b) => Number(mineChains.has(b.id)) - Number(mineChains.has(a.id))).slice(0, 4);
+    const out: HistorySeries[] = chains.map((c, i) => ({ key: c.id, label: c.name, slot: i + 1, kind: 'line', points: online[c.id].map(([w, v]) => ({ t: weekStart(w), v })) }));
+    const bought = observations.filter((o) => o.productId === id && o.pricePerKg != null && o.country === country);
+    if (bought.length) out.push({ key: 'mine', label: 'Mes achats', slot: 5, kind: 'dots', points: bought.map((o) => ({ t: new Date(o.date).getTime(), v: o.pricePerKg! })).sort((a, b) => a.t - b.t) });
+    return out;
+  }, [online, observations, id, country, state.profile.stores]);
 
   if (!ing) {
     return (
@@ -202,6 +216,13 @@ export function Product({ id }: { id: string }) {
         )}
         <p className="small muted">Prix dans la devise de chaque pays ; estimations sauf mention « relevé » (tes tickets), « en ligne » (site de l’enseigne, relevé chaque semaine) ou « Open Prices » (communauté).</p>
       </Section>
+
+      {historySeries.some((s) => s.points.length) && (
+        <Section title="Évolution des prix">
+          <PriceHistoryChart series={historySeries} unit={unit} format={(v) => fmtMoney(v, country)} />
+          <p className="small muted">Prix en ligne des enseignes relevé chaque semaine{historySeries.some((s) => s.key === 'mine') ? ', et prix payés sur tes tickets' : ''} ({unit.replace('/', 'par ')}).</p>
+        </Section>
+      )}
 
       <Section title="Prix de la communauté">
         {community ? (

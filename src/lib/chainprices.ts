@@ -70,3 +70,23 @@ export function chainPrice(ingredientId: string, chainId: string | null, country
 export function chainPricesUpdatedAt(country: string): string | null {
   return data[country]?.updatedAt ?? null;
 }
+
+/** Lundi d'une semaine ISO ("2026-W41"), en millisecondes. */
+export function weekStart(week: string): number {
+  const [y, w] = week.split('-W').map(Number);
+  const jan4 = new Date(Date.UTC(y, 0, 4));
+  const monday = jan4.getTime() - ((jan4.getUTCDay() || 7) - 1) * 86400000;
+  return monday + (w - 1) * 7 * 86400000;
+}
+
+/** Évolution hebdomadaire du prix en ligne d'un ingrédient, par enseigne. */
+export async function fetchChainHistory(ingredientId: string, country: string): Promise<Record<string, [string, number][]>> {
+  if (country !== 'PT') return {};
+  try {
+    const res = await fetch(`/api/chain-prices/history?country=${country}&id=${encodeURIComponent(ingredientId)}`);
+    if (!res.ok) return {};
+    return ((await res.json()) as { chains?: Record<string, [string, number][]> }).chains ?? {};
+  } catch {
+    return {};
+  }
+}

@@ -9,6 +9,7 @@
 //   3. Synthèse : médiane par enseigne et par ingrédient → clé KV "chain-prices:PT", servie par /api/chain-prices.
 import { INGREDIENT_BY_ID } from '../src/data/ingredients';
 import { CATALOG } from './scraper-catalog.js';
+import { extractRecipe } from '../server/core.mjs';
 
 export const CHAINS = [
   { id: 'pt-pingodoce', index: 'https://www.pingodoce.pt/home/sitemap_index.xml', brand: 'pingo-doce' },
@@ -18,7 +19,7 @@ export const CHAINS = [
 const UA = 'CookingHubBot/1.0 (+https://cooking-hub.kronogame.workers.dev; relevé de prix hebdomadaire, quelques pages par heure)';
 const PER_INGREDIENT = 4; // produits suivis par ingrédient et par enseigne
 const PAGES_PER_RUN = 12;
-const URLS_PER_RUN = 1000; // adresses de sitemap traitées par passage (les gros sitemaps sont lus en plusieurs fois)
+const URLS_PER_RUN = 600; // adresses de sitemap traitées par passage (les gros sitemaps sont lus en plusieurs fois)
 const REDISCOVER_DAYS = 28;
 const PT_FACTOR = 0.9; // indice de prix du Portugal (src/data/reference.ts)
 // Sections non alimentaires des sites (on les ignore même si un mot correspond).
@@ -97,6 +98,46 @@ export async function streamLocs(body, from, count) {
     const k = buf.lastIndexOf('<loc>');
     buf = k >= 0 ? buf.slice(k) : buf.slice(-6);
     if (done) return { urls: out, more: false };
+  }
+}
+
+/**
+ * Comme streamLocs, mais reprend à une position en OCTETS : les octets précédents sont reçus et ignorés sans être
+ * décodés (coût quasi nul), si bien qu'un passage coûte autant au début qu'à la fin d'un fichier de 10 Mo.
+ * Renvoie `nextByte`, position juste après la dernière adresse complète lue.
+ */
+export async function streamLocsFrom(body, fromByte, count) {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  const out = [];
+  let pos = 0;
+  let buf = '';
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) return { urls: out, nextByte: pos, more: false };
+    let chunk = value;
+    if (pos + chunk.length <= fromByte) {
+      pos += chunk.length;
+      continue;
+    }
+    if (pos < fromByte) chunk = chunk.subarray(fromByte - pos);
+    pos += value.length;
+    buf += decoder.decode(chunk, { stream: true });
+    let i;
+    while ((i = buf.indexOf('<loc>')) >= 0) {
+      const j = buf.indexOf('</loc>', i);
+      if (j < 0) break;
+      out.push(buf.slice(i + 5, j).trim().replace(/&amp;/g, '&'));
+      buf = buf.slice(j + 6);
+    }
+    const k = buf.lastIndexOf('<loc>');
+    buf = k >= 0 ? buf.slice(k) : buf.slice(-6);
+    // On ne s'arrête qu'en fin de morceau : la reprise se fait juste après la dernière adresse complète.
+    if (out.length >= count) {
+      await reader.cancel().catch(() => undefined);
+      return { urls: out, nextByte: pos - encoder.encode(buf).length, more: true };
+    }
   }
 }
 
@@ -183,33 +224,44 @@ async function fetchText(url) {
 
 const getJson = async (kv, key, fallback) => (await kv.get(key, 'json')) ?? fallback;
 
-/** Diagnostic (clé KV "scrape:diag" = liste d'adresses) : statut, durée et taille reçue selon le User-Agent. */
+/** Diagnostic (clé KV "scrape:diag" = liste d'adresses) : statut, durée, taille et début du contenu, avec notre User-Agent. */
 async function diagnose(kv, urls) {
   const out = [];
-  for (const url of urls) {
-    for (const [name, ua] of [['bot', UA], ['navigateur', 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36']]) {
-      const t0 = Date.now();
-      try {
-        const res = await fetch(url, { headers: { 'User-Agent': ua }, signal: AbortSignal.timeout(30000) });
-        const reader = res.body.getReader();
-        let bytes = 0;
-        while (bytes < 2_000_000) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          bytes += value.length;
-        }
-        await reader.cancel().catch(() => undefined);
-        out.push({ url, ua: name, status: res.status, bytes, ms: Date.now() - t0 });
-        if (name === 'bot' && /sitemap/.test(url)) {
-          const sample = await fetch(url, { headers: { 'User-Agent': ua } }).then((r) => r.text());
-          await kv.put(`scrape:sample:${new URL(url).hostname}`, sample.slice(0, 400000));
-        }
-      } catch (e) {
-        out.push({ url, ua: name, error: String(e), ms: Date.now() - t0 });
+  for (const entry of urls) {
+    const url = typeof entry === 'string' ? entry : entry.url;
+    const t0 = Date.now();
+    try {
+      const headers = { 'User-Agent': UA, ...(entry.range ? { Range: entry.range } : {}) };
+      const res = await fetch(url, { headers, signal: AbortSignal.timeout(30000) });
+      const text = await res.text();
+      if (entry.range) {
+        out.push({ url, range: entry.range, status: res.status, acceptRanges: res.headers.get('accept-ranges'), contentRange: res.headers.get('content-range'), bytes: text.length, head: text.slice(0, 200), ms: Date.now() - t0 });
+        continue;
       }
+      const recipe = /<html/i.test(text) ? extractRecipe(text) : null;
+      out.push({ url, status: res.status, final: res.url, bytes: text.length, ms: Date.now() - t0, recipe: recipe ? { name: recipe.name, ingredients: (recipe.recipeIngredient ?? []).length, steps: Array.isArray(recipe.recipeInstructions) ? recipe.recipeInstructions.length : typeof recipe.recipeInstructions, time: recipe.totalTime, yield: recipe.recipeYield, cuisine: recipe.recipeCuisine } : null, locs: [...text.matchAll(/<loc>([^<]+)<\/loc>/g)].slice(0, 6).map((m) => m[1]), text: /<html/i.test(text) ? '' : text.slice(0, 1500) });
+    } catch (e) {
+      out.push({ url, error: String(e), ms: Date.now() - t0 });
     }
   }
   await kv.put('scrape:diag-result', JSON.stringify(out));
+}
+
+/**
+ * Historique hebdomadaire : pour chaque enseigne et ingrédient, une liste [semaine, prix au kilo]
+ * (seuls les prix relevés cette semaine, pas ceux reconduits ; deux ans au plus).
+ */
+export function appendHistory(history, week, chains) {
+  const series = history.series ?? {};
+  for (const [chain, byId] of Object.entries(chains)) {
+    for (const [id, p] of Object.entries(byId)) {
+      if (p.stale) continue;
+      const list = ((series[chain] ??= {})[id] ??= []).filter(([w]) => w !== week);
+      list.push([week, p.perKg]);
+      series[chain][id] = list.sort((a, b) => a[0].localeCompare(b[0])).slice(-104);
+    }
+  }
+  return { updatedAt: new Date().toISOString(), series };
 }
 
 /** Un passage : avance d'une étape (un sitemap, ou quelques pages produit, ou la synthèse). */
@@ -241,7 +293,7 @@ export async function runScraper(env, now = new Date()) {
     // Premier passage : un index de sitemaps par enseigne, lu lors des passages suivants.
     if (!state.sitemaps) {
       state.sitemaps = CHAINS.map((c) => ({ chain: c.id, url: c.index, isIndex: true, tries: 0 }));
-      state.candidates = {};
+      for (const c of CHAINS) await kv.delete(`scrape:cand:${c.id}`);
       await kv.put('scrape:state', JSON.stringify(state));
       return `découverte : ${CHAINS.length} enseignes`;
     }
@@ -279,14 +331,17 @@ export async function runScraper(env, now = new Date()) {
       try {
         const res = await fetch(job.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(60000) });
         if (!res.ok || !res.body) throw new Error(`${res.status}`);
-        const { urls, more } = await streamLocs(res.body, offset, URLS_PER_RUN);
-        const cand = (state.candidates[job.chain] ??= {});
+        const { urls, nextByte, more } = await streamLocsFrom(res.body, offset, URLS_PER_RUN);
+        // Candidats rangés à part (un par enseigne) : l'état reste léger à relire et réécrire.
+        const candKey = `scrape:cand:${job.chain}`;
+        const cand = (await getJson(kv, candKey, {}));
         let hits = 0;
         for (const u of urls) for (const id of matchUrl(u)) (cand[id] ??= []).push(u), hits++;
         const brand = CHAINS.find((c) => c.id === job.chain).brand;
         for (const id of Object.keys(cand)) cand[id] = rankCandidates(cand[id], brand);
-        if (more) state.sitemaps.unshift({ ...job, offset: offset + URLS_PER_RUN });
-        msg = `sitemap ${job.url} [${offset}-${offset + urls.length}] : ${hits} correspondances (${Math.round((Date.now() - t0) / 1000)} s)`;
+        await kv.put(candKey, JSON.stringify(cand));
+        if (more) state.sitemaps.unshift({ ...job, offset: nextByte });
+        msg = `sitemap ${job.url} [octet ${offset}] : ${urls.length} adresses, ${hits} correspondances (${Math.round((Date.now() - t0) / 1000)} s)`;
       } catch (e) {
         msg = `${job.url}: ${e.message}`;
       }
@@ -297,7 +352,10 @@ export async function runScraper(env, now = new Date()) {
     }
     // Une enseigne sans résultat ce cycle (site indisponible) garde ses produits suivis précédents.
     const chains = { ...tracked.chains };
-    for (const [chain, byId] of Object.entries(state.candidates)) if (Object.keys(byId).length) chains[chain] = byId;
+    for (const c of CHAINS) {
+      const byId = await getJson(kv, `scrape:cand:${c.id}`, {});
+      if (Object.keys(byId).length) chains[c.id] = byId;
+    }
     await kv.put('scrape:tracked', JSON.stringify({ at: now.getTime(), chains }));
     Object.assign(state, { phase: 'prices', candidates: undefined, sitemaps: undefined });
     await kv.put('scrape:state', JSON.stringify(state));
@@ -338,6 +396,7 @@ export async function runScraper(env, now = new Date()) {
     // Un produit non relevé cette semaine garde son prix précédent (marqué ancien).
     for (const [chain, byId] of Object.entries(previous.chains ?? {})) for (const [id, p] of Object.entries(byId)) if (!chains[chain]?.[id]) (chains[chain] ??= {})[id] = { ...p, stale: true };
     await kv.put('chain-prices:PT', JSON.stringify({ updatedAt: now.toISOString(), week, chains, source: 'Sites des enseignes (pages produit publiques)' }));
+    await kv.put('chain-history:PT', JSON.stringify(appendHistory(await getJson(kv, 'chain-history:PT', { series: {} }), week, chains)));
     Object.assign(state, { phase: 'done', queue: undefined, results: undefined });
     await kv.put('scrape:state', JSON.stringify(state));
     return 'prix enregistrés';

@@ -1,5 +1,6 @@
 import { useChainPrices } from '../lib/chainprices';
 import { useEffect, useMemo, useState } from 'react';
+import { importFromUrl } from '../lib/importer';
 import { loadCommunityPrices, useCommunityPrices } from '../lib/openprices';
 import { RecipeVisual, StatusBadge } from '../components/RecipeCard';
 import { Empty, Sheet, Stepper } from '../components/ui';
@@ -164,6 +165,7 @@ export function RecipeView({ recipe, preview, onSave }: { recipe: Recipe; previe
         </div>
 
         <h2>Préparation</h2>
+        {recipe.steps.length === 0 && recipe.source?.url && <SourceSteps recipe={recipe} />}
         <ol className="steps">
           {recipe.steps.map((s, i) => (
             <li key={i} className={doneSteps.includes(i) ? 'done' : ''} onClick={() => setDoneSteps(doneSteps.includes(i) ? doneSteps.filter((x) => x !== i) : [...doneSteps, i])}>
@@ -172,7 +174,7 @@ export function RecipeView({ recipe, preview, onSave }: { recipe: Recipe; previe
             </li>
           ))}
         </ol>
-        {recipe.source?.url && (
+        {recipe.source?.url && recipe.steps.length > 0 && (
           <p className="small"><a href={recipe.source.url} target="_blank" rel="noreferrer">Voir la recette originale sur {recipe.source.name} ↗</a></p>
         )}
         <div className="spacer" />
@@ -227,4 +229,38 @@ export function RecipeView({ recipe, preview, onSave }: { recipe: Recipe; previe
 
 function fridgeLabel(l: AdaptedLine): string {
   return { full: 'Au frigo', partial: 'En partie au frigo', staple: 'Placard', none: 'À acheter' }[l.fridge];
+}
+
+/** Recette du catalogue récolté : les étapes restent sur le site source (droit d'auteur) ; on peut les ouvrir ou enregistrer la recette complète pour soi. */
+function SourceSteps({ recipe }: { recipe: Recipe }) {
+  const { actions } = useApp();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const full = await importFromUrl(recipe.source!.url!);
+      actions.saveImported(full);
+      actions.like(full.id);
+      go(`/recipe/${full.id}`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <div className="card source-steps">
+      <p>
+        Les {recipe.stepCount ? `${recipe.stepCount} étapes` : 'étapes'} de cette recette sont sur <b>{recipe.source!.name}</b>.
+      </p>
+      <div className="row gap wrap">
+        <a className="btn btn-primary grow" href={recipe.source!.url} target="_blank" rel="noreferrer">Voir les étapes ↗</a>
+        <button className="btn btn-soft grow" disabled={saving} onClick={save}>{saving ? 'Import…' : '📥 Enregistrer avec les étapes'}</button>
+      </div>
+      {error && <p className="small warn-text">{error}</p>}
+      <p className="small muted">« Enregistrer » importe la recette complète dans tes recettes, sur ton appareil uniquement.</p>
+    </div>
+  );
 }

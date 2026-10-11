@@ -5,6 +5,12 @@
   --text: #2b2118;
   --muted: #7d6f63;
   --line: #eadfd3;
+  /* Palette catégorielle des graphiques (ordre fixe, validée pour les daltonismes) */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
   --primary: #e8572a;
   --primary-ink: #ffffff;
   --primary-soft: #fde6dc;
@@ -32,6 +38,11 @@
     --text: #f5ece3;
     --muted: #b3a597;
     --line: #3a2f25;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
     --primary: #ff6a3d;
     --primary-soft: #45251a;
     --good: #4cc77d;
@@ -381,3 +392,23 @@ div.ticket > .ticket-line.is-unmatched { border-left-color: var(--warn); }
 .ticket-store { margin: 0.4rem 0; }
 .orphan-tickets { display: flex; flex-direction: column; gap: 0.4rem; border-left: 4px solid var(--warn); } .orphan-row { border-top: 1px solid var(--line); padding-top: 0.4rem; }
 .row.wrap { flex-wrap: wrap; } .nearby-pick .store-item { width: 100%; border: 0; text-align: left; color: inherit; font: inherit; cursor: pointer; }
+
+/* ---------- Graphique d'évolution des prix ---------- */
+.viz { position: relative; background: var(--surface); border-radius: var(--radius); padding: 0.6rem 0.4rem 0.5rem; box-shadow: var(--shadow); }
+.viz svg { display: block; touch-action: pan-y; }
+.viz-legend { display: flex; flex-wrap: wrap; gap: 0.3rem 0.8rem; font-size: 0.78rem; color: var(--text); padding: 0 0.4rem 0.4rem; }
+.viz-legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.viz-swatch { display: inline-block; width: 14px; height: 3px; border-radius: 2px; }
+.viz-swatch.dots { width: 8px; height: 8px; border-radius: 50%; }
+.viz-grid { stroke: var(--line); stroke-width: 1; }
+.viz-axis { fill: var(--muted); font-size: 10px; }
+.viz-dot { stroke: var(--surface); stroke-width: 2; }
+.viz-crosshair { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.viz-tip { position: absolute; top: 2.2rem; width: 170px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 0.4rem 0.55rem; box-shadow: var(--shadow); font-size: 0.78rem; display: flex; flex-direction: column; gap: 0.15rem; pointer-events: none; }
+.viz-tip span { display: flex; align-items: center; gap: 0.3rem; }
+.viz-table { font-size: 0.8rem; padding: 0.3rem 0.4rem 0; }
+.viz-table summary { color: var(--muted); cursor: pointer; }
+.viz-table table { width: 100%; border-collapse: collapse; margin-top: 0.3rem; }
+.viz-table th, .viz-table td { text-align: right; padding: 0.2rem 0.3rem; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.viz-table th:first-child, .viz-table td:first-child { text-align: left; }
+.source-steps { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 0.6rem; }

@@ -494,3 +494,97 @@ describe('lecture des sitemaps par flux', () => {
     expect(await streamLocs(body(), 8, 3)).toEqual({ urls: ['https://x/p-8.html', 'https://x/p-9.html'], more: false });
   });
 });
+
+describe('historique des prix en ligne', () => {
+  it('ajoute chaque semaine un point par enseigne et ingrédient, sans les prix reconduits', async () => {
+    const { appendHistory } = await import('../worker/scraper.js');
+    let h = appendHistory({ series: {} }, '2026-W41', { 'pt-continente': { riz: { perKg: 1.2, n: 3, min: 1 }, lait: { perKg: 0.85, n: 2, min: 0.8, stale: true } } });
+    h = appendHistory(h, '2026-W42', { 'pt-continente': { riz: { perKg: 1.25, n: 3, min: 1 } } });
+    h = appendHistory(h, '2026-W42', { 'pt-continente': { riz: { perKg: 1.3, n: 3, min: 1 } } });
+    expect(h.series['pt-continente'].riz).toEqual([['2026-W41', 1.2], ['2026-W42', 1.3]]);
+    expect(h.series['pt-continente'].lait).toBeUndefined();
+  });
+});
+
+describe('semaines ISO', () => {
+  it('donne le lundi de la semaine', async () => {
+    const { weekStart } = await import('../src/lib/chainprices');
+    expect(new Date(weekStart('2026-W41')).toISOString().slice(0, 10)).toBe('2026-10-05');
+    expect(new Date(weekStart('2027-W01')).toISOString().slice(0, 10)).toBe('2027-01-04');
+  });
+});
+
+describe('récolte de recettes', () => {
+  const ld = (name: string, ingredients: string[]) => `<html><script type="application/ld+json">${JSON.stringify({ '@type': 'Recipe', name, recipeIngredient: ingredients, recipeInstructions: [{ text: 'a' }, { text: 'b' }], totalTime: 'PT30M', recipeYield: '4', image: ['https://img/x.jpg'] })}</script></html>`;
+
+  it('garde les faits de la recette mais pas le texte des étapes', async () => {
+    const { compactRecipe } = await import('../worker/recipes.js');
+    const c = compactRecipe({ name: 'Keftas de bœuf, sauce yaourt : la meilleure recette', recipeIngredient: ['500 g de bœuf haché', '1 oignon', '1 yaourt'], recipeInstructions: [{ text: 'Mélanger' }, { text: 'Cuire' }], recipeYield: ['2'], image: { url: 'https://img/k.jpg' } }, 'https://m/r.aspx', 'Marmiton');
+    expect(c).toMatchObject({ name: 'Keftas de bœuf, sauce yaourt', stepCount: 2, recipeYield: '2', image: 'https://img/k.jpg', source: 'Marmiton' });
+    expect(JSON.stringify(c)).not.toContain('Mélanger');
+    expect(compactRecipe({ name: 'X', recipeIngredient: ['a'] }, 'u', 's')).toBeNull();
+  });
+
+  it('collecte des adresses dans les sitemaps puis lit les recettes, par petits passages', async () => {
+    const { runRecipes, recipesJson, SOURCES } = await import('../worker/recipes.js');
+    const store = new Map<string, string>();
+    const kv = { get: async (k: string, t?: string) => (store.has(k) ? (t === 'json' ? JSON.parse(store.get(k)!) : store.get(k)) : null), put: async (k: string, v: string) => void store.set(k, v), delete: async (k: string) => void store.delete(k) };
+    const tele = SOURCES[0].sitemaps![0];
+    const pages: Record<string, string> = {
+      [tele]: '<urlset><url><loc>https://teleculinaria.pt/receitas/bife-a-portuguesa-2/</loc></url><url><loc>https://teleculinaria.pt/blog/x/</loc></url><url><loc>https://teleculinaria.pt/receitas/arroz-de-pato/</loc></url></urlset>',
+      'https://www.marmiton.org/wsitemap_recipes_index.xml': '<sitemapindex><sitemap><loc>https://www.marmiton.org/wsitemap_recipes_1.xml</loc></sitemap></sitemapindex>',
+      'https://www.marmiton.org/wsitemap_recipes_1.xml': '<urlset><url><loc>https://www.marmiton.org/recettes/recette_keftas_1.aspx</loc></url></urlset>',
+      'https://teleculinaria.pt/receitas/bife-a-portuguesa-2/': ld('Bife à portuguesa', ['4 bifes de vaca', '2 dentes de alho', '1 ovo']),
+      'https://teleculinaria.pt/receitas/arroz-de-pato/': ld('Arroz de pato', ['1 pato']),
+      'https://www.marmiton.org/recettes/recette_keftas_1.aspx': ld('Keftas', ['500 g de bœuf haché', '1 oignon', '1 yaourt']),
+    };
+    const orig = globalThis.fetch;
+    globalThis.fetch = (async (url: string) => {
+      const body = pages[url];
+      if (body == null) return new Response('<urlset></urlset>');
+      return new Response(new TextEncoder().encode(body));
+    }) as typeof fetch;
+    try {
+      const env = { PRICES: kv };
+      const now = new Date('2026-10-12T08:00:00Z');
+      const log: string[] = [];
+      for (let i = 0; i < 80 && !log.some((l) => l.includes('restantes') && l.endsWith(' 0 restantes')); i++) log.push(await runRecipes(env, new Date(now.getTime() + i * 600000)));
+      const all = JSON.parse(await recipesJson(kv));
+      expect(all.map((r: { name: string }) => r.name).sort()).toEqual(['Bife à portuguesa', 'Keftas']);
+      // Une recette déjà récoltée n'est pas reprise la semaine suivante.
+      const index = JSON.parse(store.get('recipes:index')!);
+      expect(index.count).toBe(2);
+    } finally {
+      globalThis.fetch = orig;
+    }
+  });
+
+  it('convertit une recette récoltée avec un identifiant stable et écarte les recettes mal reconnues', async () => {
+    const { fromHarvestedRecipe } = await import('../src/lib/importer');
+    const r = { name: 'Riz au poulet', recipeIngredient: ['200 g de riz', '2 blancs de poulet', '1 oignon'], recipeYield: '2', url: 'https://www.marmiton.org/recettes/recette_riz_9.aspx', source: 'Marmiton', stepCount: 4 };
+    const a = fromHarvestedRecipe(r)!;
+    expect(a).toMatchObject({ steps: [], stepCount: 4, imported: false, source: { name: 'Marmiton' } });
+    expect(fromHarvestedRecipe(r)!.id).toBe(a.id);
+    expect(fromHarvestedRecipe({ ...r, recipeIngredient: ['1 truc', '2 machins', '1 riz'] })).toBeNull();
+  });
+});
+
+describe('lecture des sitemaps à partir d’un octet', () => {
+  it('reprend où la tranche précédente s’était arrêtée, sans rien perdre', async () => {
+    const { streamLocsFrom } = await import('../worker/scraper.js');
+    const xml = '<urlset>' + Array.from({ length: 50 }, (_, i) => `<url><loc>https://x/p-${i}.html</loc><image:loc>https://img/${i}é.jpg</image:loc></url>`).join('') + '</urlset>';
+    const bytes = new TextEncoder().encode(xml);
+    const body = () => new ReadableStream({ start(c) { for (let i = 0; i < bytes.length; i += 97) c.enqueue(bytes.slice(i, i + 97)); c.close(); } });
+    const seen = new Set<string>();
+    let from = 0;
+    for (let guard = 0; guard < 100; guard++) {
+      const r = await streamLocsFrom(body(), from, 7);
+      if (from === 0) expect(r.urls.length).toBeGreaterThanOrEqual(7);
+      r.urls.forEach((u: string) => seen.add(u));
+      if (!r.more) break;
+      expect(r.nextByte).toBeGreaterThan(from);
+      from = r.nextByte;
+    }
+    expect(seen.size).toBe(50);
+  });
+});

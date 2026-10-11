@@ -3,6 +3,8 @@ import { SEED_RECIPES } from './data/recipes';
 import { getIngredient, setCustomIngredients } from './data/ingredients';
 import { getChain } from './data/reference';
 import { labelKey } from './lib/custom';
+import { fromHarvestedRecipe } from './lib/importer';
+import { useLexiconReady } from './lib/lexicon';
 import type { AppState, ChosenStore, FridgeItem, Ingredient, PlannedMeal, Profile, Receipt, Recipe, ShoppingItem } from './types';
 import { observationsFromReceipts } from './lib/receipts';
 import { setObservedPrices } from './lib/pricing';
@@ -68,6 +70,16 @@ function useStore() {
 
   // Catalogue généré par `npm run recipes:import` (public/catalog.json), chargé à la volée.
   const [catalog, setCatalog] = useState<Recipe[]>([]);
+  // Recettes récoltées chaque semaine par le Worker (Teleculinária, Marmiton), converties une fois le dictionnaire chargé.
+  const [harvested, setHarvested] = useState<Parameters<typeof fromHarvestedRecipe>[0][]>([]);
+  const lexReady = useLexiconReady();
+  useEffect(() => {
+    fetch('/api/recipes')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list) => Array.isArray(list) && setHarvested(list))
+      .catch(() => undefined);
+  }, []);
+  const web = useMemo(() => (lexReady ? harvested.map(fromHarvestedRecipe).filter((r): r is Recipe => !!r) : []), [harvested, lexReady]);
   useEffect(() => {
     fetch('/catalog.json')
       .then((r) => (r.ok ? r.json() : []))
@@ -76,8 +88,8 @@ function useStore() {
   }, []);
 
   const recipes = useMemo<Record<string, Recipe>>(
-    () => Object.fromEntries([...SEED_RECIPES, ...catalog, ...state.imported].map((r) => [r.id, r])),
-    [catalog, state.imported],
+    () => Object.fromEntries([...SEED_RECIPES, ...catalog, ...web, ...state.imported].map((r) => [r.id, r])),
+    [catalog, web, state.imported],
   );
 
   // Les prix relevés sur les tickets alimentent le calcul des prix avant l'affichage des écrans.

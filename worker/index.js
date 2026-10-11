@@ -14,12 +14,18 @@ async function cached(request, ttlSeconds, compute) {
   return res;
 }
 
+import { recipesJson, runRecipes } from './recipes.js';
 import { runScraper } from './scraper.js';
 
 export default {
   async scheduled(event, env, ctx) {
     // Relevé des prix des enseignes portugaises : une petite étape toutes les 10 minutes (voir scraper.js).
-    ctx.waitUntil(runScraper(env).then((msg) => console.log('scraper:', msg)));
+    // Quand les prix de la semaine sont relevés, la même tâche récolte quelques recettes (voir recipes.js).
+    ctx.waitUntil(
+      runScraper(env)
+        .then((msg) => (msg === 'rien à faire cette semaine' ? runRecipes(env) : msg))
+        .then((msg) => console.log('cron:', msg)),
+    );
   },
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -43,6 +49,24 @@ export default {
       // Prix en ligne des enseignes (relevé hebdomadaire) ; seul le Portugal est couvert pour l'instant.
       const data = q.get('country') === 'PT' && env.PRICES ? await env.PRICES.get('chain-prices:PT', 'json') : null;
       return Response.json(data ?? { chains: {} }, { headers: { 'Cache-Control': 'public, max-age=3600' } });
+    }
+    if (url.pathname === '/api/recipes' && request.method === 'GET') {
+      // Recettes récoltées chaque semaine (fiches sans le texte des étapes, avec le lien vers la source).
+      const cache = caches.default;
+      const key = new Request(new URL('/api/recipes', url).toString());
+      const hit = await cache.match(key);
+      if (hit) return hit;
+      const res = new Response(env.PRICES ? await recipesJson(env.PRICES) : '[]', { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=21600' } });
+      await cache.put(key, res.clone());
+      return res;
+    }
+    if (url.pathname === '/api/chain-prices/history' && request.method === 'GET') {
+      // Évolution hebdomadaire du prix en ligne d'un ingrédient, par enseigne.
+      const id = q.get('id') ?? '';
+      const h = q.get('country') === 'PT' && env.PRICES ? await env.PRICES.get('chain-history:PT', 'json') : null;
+      const chains = {};
+      for (const [chain, byId] of Object.entries(h?.series ?? {})) if (byId[id]) chains[chain] = byId[id];
+      return Response.json({ id, chains }, { headers: { 'Cache-Control': 'public, max-age=21600' } });
     }
     if (url.pathname === '/api/chain-prices/status' && request.method === 'GET') {
       const st = env.PRICES ? await env.PRICES.get('scrape:state', 'json') : null;
