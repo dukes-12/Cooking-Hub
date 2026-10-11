@@ -2,7 +2,7 @@ import { useChainPrices } from '../lib/chainprices';
 import { useEffect, useMemo, useState } from 'react';
 import { importFromUrl } from '../lib/importer';
 import { loadCommunityPrices, useCommunityPrices } from '../lib/openprices';
-import { RecipeVisual, StatusBadge } from '../components/RecipeCard';
+import { RecipeVisual, SourceBadge, StatusBadge } from '../components/RecipeCard';
 import { Empty, Sheet, Stepper } from '../components/ui';
 import { EQUIPMENT } from '../data/reference';
 import { adaptRecipe, missingCost, reasonLabel, type AdaptedLine } from '../lib/adapt';
@@ -72,7 +72,7 @@ export function RecipeView({ recipe, preview, onSave }: { recipe: Recipe; previe
       </div>
 
       <div className="recipe-body">
-        <p className="small muted">{recipe.cuisine} · {recipe.source?.name ?? 'Cooking Hub'}</p>
+        <p className="small muted">{recipe.cuisine} · <SourceBadge recipe={recipe} long /></p>
         <h1>{recipe.title}</h1>
         <StatusBadge a={a} />
 

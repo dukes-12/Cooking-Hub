@@ -6,8 +6,10 @@ import { gramsToBase } from '../lib/units';
 import type { Ingredient } from '../types';
 import { IngredientPicker, Sheet } from './ui';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-const canScan = typeof window !== 'undefined' && 'BarcodeDetector' in window && !!navigator.mediaDevices?.getUserMedia;
+import { getBarcodeDetector, readBarcodeFromFile } from '../lib/barcode';
+
+// Caméra disponible (HTTPS) : le scan marche partout, avec le lecteur intégré du navigateur ou le décodeur ZXing.
+const canScan = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
 
 /** Quantité à ranger au frigo pour un produit emballé (poids ou volume du paquet, sinon 1 unité). */
 export function packQuantity(p: OffProduct, ing: Ingredient): number {
@@ -50,7 +52,7 @@ export function BarcodeSheet({ open, onClose, onAdd, onOpenProduct }: { open: bo
     }
   };
 
-  // Scan caméra (Chrome sur Android) : on lit une image toutes les 300 ms jusqu'à trouver un code.
+  // Scan caméra : on lit une image toutes les 300 ms jusqu'à trouver un code.
   useEffect(() => {
     if (!scanning || !open) return;
     let stream: MediaStream | null = null;
@@ -62,11 +64,14 @@ export function BarcodeSheet({ open, onClose, onAdd, onOpenProduct }: { open: bo
         if (stopped || !video.current) return;
         video.current.srcObject = stream;
         await video.current.play();
-        const detector = new (window as any).BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'] });
+        const detector = await getBarcodeDetector();
+        let busy = false;
         timer = setInterval(async () => {
-          if (!video.current) return;
+          if (!video.current || busy || video.current.readyState < 2) return;
+          busy = true;
           const found = await detector.detect(video.current).catch(() => []);
-          if (found[0]?.rawValue) {
+          busy = false;
+          if (found[0]?.rawValue && !stopped) {
             setScanning(false);
             setCode(found[0].rawValue);
             lookup(found[0].rawValue);
@@ -98,11 +103,39 @@ export function BarcodeSheet({ open, onClose, onAdd, onOpenProduct }: { open: bo
         <>
           {scanning && <video ref={video} className="scan-video" playsInline muted />}
           {canScan && !scanning && <button className="btn btn-primary btn-block" onClick={() => setScanning(true)}>📷 Scanner le code-barres</button>}
+          {scanning && <button className="btn btn-ghost btn-block" onClick={() => setScanning(false)}>Arrêter la caméra</button>}
+          <label className="btn btn-soft btn-block">
+            🖼️ Photo du code-barres
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              hidden
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                e.target.value = '';
+                if (!f) return;
+                setError(null);
+                setLoading(true);
+                try {
+                  const code = await readBarcodeFromFile(f);
+                  if (code) {
+                    setCode(code);
+                    await lookup(code);
+                  } else setError('Aucun code-barres lu sur la photo : rapproche-toi, ou tape les chiffres.');
+                } catch {
+                  setError('Lecture impossible : tape les chiffres sous le code-barres.');
+                } finally {
+                  setLoading(false);
+                }
+              }}
+            />
+          </label>
           <div className="search-bar">
             <input className="input" inputMode="numeric" value={code} placeholder="Code sous le code-barres (ex. 5601312…)" onChange={(e) => setCode(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && lookup(code)} />
             <button className="btn btn-soft" disabled={loading || !code.trim()} onClick={() => lookup(code)}>{loading ? '…' : 'Chercher'}</button>
           </div>
-          {!canScan && <p className="small muted">Ton navigateur ne sait pas lire les codes-barres avec la caméra (c'est le cas de Safari sur iPhone) : tape les chiffres écrits sous le code.</p>}
+          {!canScan && <p className="small muted">Caméra indisponible ici (il faut l'adresse https de l'appli) : prends une photo ou tape les chiffres écrits sous le code.</p>}
           {error && <p className="small warn-text">{error}</p>}
         </>
       ) : (

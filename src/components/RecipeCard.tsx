@@ -49,6 +49,7 @@ export function RecipeRow({ match, right }: { match: Match; right?: React.ReactN
       <RecipeVisual recipe={a.recipe} size="sm" />
       <div className="recipe-row-body">
         <div className="recipe-row-title">{a.recipe.title}</div>
+        <div className="small muted">{a.recipe.cuisine} · <SourceBadge recipe={a.recipe} /></div>
         <MetaRow a={a} />
         <div className="row-badges">
           <StatusBadge a={a} />
@@ -57,5 +58,16 @@ export function RecipeRow({ match, right }: { match: Match; right?: React.ReactN
       </div>
       {right}
     </div>
+  );
+}
+
+/** Site d'origine de la recette, avec le lien vers la recette en ligne quand il existe. */
+export function SourceBadge({ recipe, long }: { recipe: Recipe; long?: boolean }) {
+  const name = recipe.source?.name ?? 'Cooking Hub';
+  if (!recipe.source?.url) return <span className="source-badge">{name}</span>;
+  return (
+    <a className="source-badge is-link" href={recipe.source.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title={`Voir la recette sur ${name}`}>
+      {long ? `Recette de ${name}` : name} ↗
+    </a>
   );
 }

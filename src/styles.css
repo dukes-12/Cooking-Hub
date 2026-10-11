@@ -412,3 +412,4 @@ div.ticket > .ticket-line.is-unmatched { border-left-color: var(--warn); }
 .viz-table th, .viz-table td { text-align: right; padding: 0.2rem 0.3rem; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
 .viz-table th:first-child, .viz-table td:first-child { text-align: left; }
 .source-steps { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 0.6rem; }
+.source-badge { font-weight: 600; } .source-badge.is-link { color: var(--primary); text-decoration: none; } .source-badge.is-link:hover { text-decoration: underline; }

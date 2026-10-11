@@ -114,7 +114,7 @@ Ordre des sources de prix (`src/lib/pricing.ts`) : **tes tickets** (médiane 90 
   - `GET /api/off/category?cat=en:…&country=PT` : produits les plus scannés du rayon (photo, Nutri-Score, valeurs nutritionnelles) ;
   - `GET /api/off/product?code=…` : fiche d'un produit par code-barres.
   - User-Agent `CookingHub/1.0 (contact)` demandé par Open Food Facts : secret `OFF_CONTACT` du Worker.
-- **Dans l'appli** : prix « Open Prices » dans les fiches produit, recettes et comparatifs ; section « Prix de la communauté » (par enseigne) et « Dans les rayons » ; photo et valeurs moyennes pour 100 g quand le produit n'en a pas ; bouton **Code-barres** dans le frigo (scan caméra sur Chrome Android, saisie des chiffres ailleurs, dont Safari iPhone).
+- **Dans l'appli** : prix « Open Prices » dans les fiches produit, recettes et comparatifs ; section « Prix de la communauté » (par enseigne) et « Dans les rayons » ; photo et valeurs moyennes pour 100 g quand le produit n'en a pas ; bouton **Code-barres** dans le frigo : scan caméra, photo du code ou saisie des chiffres ; lecteur intégré du navigateur quand il existe (Chrome Android), sinon décodeur ZXing en WebAssembly (`barcode-detector`, fichier servi par l'appli) — marche donc aussi sur iPhone.
 - **Licences** : données Open Food Facts et Open Prices sous **ODbL** (citées dans l'appli), photos sous **CC BY-SA**.
 ### Relevé hebdomadaire des prix au Portugal (Continente, Pingo Doce, Auchan)
 

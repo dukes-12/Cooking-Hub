@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { MetaRow, RecipeVisual, StatusBadge, useMatches } from '../components/RecipeCard';
+import { MetaRow, RecipeVisual, SourceBadge, StatusBadge, useMatches } from '../components/RecipeCard';
 import { Chip, Empty } from '../components/ui';
 import { CATEGORY_LABELS, matchesCuisines } from '../data/reference';
 import type { Match } from '../lib/adapt';
@@ -162,7 +162,7 @@ function SwipeCard({ match, depth, onDecide }: { match: Match; depth: number; on
       <div className="stamp stamp-menu" style={{ opacity: menuOpacity }}>AU MENU</div>
       <div className="swipe-body">
         <div className="row between">
-          <span className="small muted">{a.recipe.cuisine} · {'●'.repeat(a.recipe.difficulty)}{'○'.repeat(3 - a.recipe.difficulty)}</span>
+          <span className="small muted">{a.recipe.cuisine} · <SourceBadge recipe={a.recipe} /> · {'●'.repeat(a.recipe.difficulty)}{'○'.repeat(3 - a.recipe.difficulty)}</span>
           <span className="score" title="Compatibilité avec ton profil">{match.score}%</span>
         </div>
         <h2>{a.recipe.title}</h2>
