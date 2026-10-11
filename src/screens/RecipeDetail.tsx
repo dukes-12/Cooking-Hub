@@ -309,6 +309,7 @@ function PhotoButton({ recipe }: { recipe: Recipe }) {
 /** Mention obligatoire pour les photos libres de Wikimedia Commons. */
 function PhotoCredit({ recipe }: { recipe: Recipe }) {
   const photo = useRecipePhoto(recipe);
+  if (photo?.kind === 'ai') return <span className="small muted credit">Illustration générée par IA — pas une photo du plat · 📷 pour mettre la tienne</span>;
   if (photo?.kind !== 'wiki' || !photo.credit) return null;
   return <a className="small muted credit" href={photo.credit} target="_blank" rel="noreferrer">Photo : Wikimedia Commons</a>;
 }

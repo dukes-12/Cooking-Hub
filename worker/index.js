@@ -14,6 +14,7 @@ async function cached(request, ttlSeconds, compute) {
   return res;
 }
 
+import { recipeImage, warmRecipeImages } from './recipeImages.js';
 import { recipesJson, runRecipes } from './recipes.js';
 import { runScraper } from './scraper.js';
 
@@ -21,6 +22,7 @@ export default {
   async scheduled(event, env, ctx) {
     // Relevé des prix des enseignes portugaises : une petite étape toutes les 10 minutes (voir scraper.js).
     // Quand les prix de la semaine sont relevés, la même tâche récolte quelques recettes (voir recipes.js).
+    ctx.waitUntil(warmRecipeImages(env).then((msg) => msg && console.log('cron:', msg)));
     ctx.waitUntil(
       runScraper(env)
         .then((msg) => (msg === 'rien à faire cette semaine' ? runRecipes(env) : msg))
@@ -50,6 +52,8 @@ export default {
       const data = q.get('country') === 'PT' && env.PRICES ? await env.PRICES.get('chain-prices:PT', 'json') : null;
       return Response.json(data ?? { chains: {} }, { headers: { 'Cache-Control': 'public, max-age=3600' } });
     }
+    const img = url.pathname.match(/^\/api\/recipe-image\/([a-z0-9-]+)$/);
+    if (img && request.method === 'GET') return recipeImage(img[1], env);
     if (url.pathname === '/api/recipes' && request.method === 'GET') {
       // Recettes récoltées chaque semaine (fiches sans le texte des étapes, avec le lien vers la source).
       const cache = caches.default;

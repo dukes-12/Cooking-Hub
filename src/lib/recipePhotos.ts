@@ -1,5 +1,8 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
+import { SEED_RECIPES } from '../data/recipes';
 import type { Recipe } from '../types';
+
+const SEED_IDS = new Set(SEED_RECIPES.map((r) => r.id));
 import { productImage } from './images';
 import { normalize } from './text';
 
@@ -8,11 +11,12 @@ import { normalize } from './text';
  *  1. ta propre photo (prise ou choisie dans l'appli, gardée sur l'appareil dans IndexedDB) ;
  *  2. la photo fournie par le site d'origine (recettes importées ou récoltées) ;
  *  3. une photo libre de droits du plat sur Wikimedia Commons (via Wikidata), pour les plats connus ;
- *  4. sinon, l'émoji de la recette.
+ *  4. pour les recettes de l'appli, une illustration générée par IA (Workers AI, gardée sur le serveur) ;
+ *  5. sinon, l'émoji de la recette.
  */
 export interface RecipePhoto {
   url: string;
-  kind: 'mine' | 'source' | 'wiki';
+  kind: 'mine' | 'source' | 'wiki' | 'ai';
   credit?: string;
 }
 
@@ -151,7 +155,9 @@ export function useRecipePhoto(recipe: Recipe): RecipePhoto | null {
       if (mine) return setPhoto({ url: mine, kind: 'mine' });
       if (recipe.image) return setPhoto({ url: recipe.image, kind: 'source' });
       const wiki = await dishPhoto(recipe.title);
-      if (alive) setPhoto(wiki);
+      if (!alive) return;
+      // Recette inventée sans photo connue : illustration générée une fois par le serveur.
+      setPhoto(wiki ?? (SEED_IDS.has(recipe.id) ? { url: `/api/recipe-image/${recipe.id}`, kind: 'ai' } : null));
     })();
     return () => {
       alive = false;
