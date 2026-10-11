@@ -20,14 +20,16 @@ import { runScraper } from './scraper.js';
 
 export default {
   async scheduled(event, env, ctx) {
-    // Relevé des prix des enseignes portugaises : une petite étape toutes les 10 minutes (voir scraper.js).
-    // Quand les prix de la semaine sont relevés, la même tâche récolte quelques recettes (voir recipes.js).
-    ctx.waitUntil(warmRecipeImages(env).then((msg) => msg && console.log('cron:', msg)));
-    ctx.waitUntil(
-      runScraper(env)
-        .then((msg) => (msg === 'rien à faire cette semaine' ? runRecipes(env) : msg))
-        .then((msg) => console.log('cron:', msg)),
-    );
+    // Une seule tâche par passage (le forfait gratuit limite le calcul par passage) :
+    //  - à :00, :20, :40 → relevé des prix des enseignes portugaises (scraper.js) ;
+    //  - à :10, :30, :50 → illustrations IA à pré-générer s'il en reste (recipeImages.js), sinon récolte de recettes (recipes.js).
+    // Quand les prix de la semaine sont relevés, les créneaux des prix servent aussi aux recettes.
+    const slot = Math.floor(new Date(event.scheduledTime).getUTCMinutes() / 10) % 2;
+    const task =
+      slot === 0
+        ? runScraper(env).then((msg) => (msg === 'rien à faire cette semaine' ? runRecipes(env) : msg))
+        : warmRecipeImages(env).then((msg) => msg ?? runRecipes(env));
+    ctx.waitUntil(task.then((msg) => console.log('cron:', msg)));
   },
   async fetch(request, env) {
     const url = new URL(request.url);

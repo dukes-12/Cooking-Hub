@@ -42,11 +42,15 @@ export async function warmRecipeImages(env, perRun = 1) {
   const todo = [];
   for (const r of SEED_RECIPES) {
     if (todo.length >= perRun) break;
+    if (done[r.id] === 'en cours') done[r.id] = 'échec (passage interrompu)';
     if (r.id in done || r.image) continue;
     if (await env.PRICES.get(`recipe-img:${r.id}`, 'stream').then((b) => b && (b.cancel(), true))) done[r.id] = 'ok';
     else todo.push(r);
   }
   for (const r of todo) {
+    // Marquée « en cours » avant la génération : si le passage s'arrête net, la suivante la saute.
+    done[r.id] = 'en cours';
+    await env.PRICES.put('recipe-img:warm-result', JSON.stringify(done));
     const res = await recipeImage(r.id, env);
     done[r.id] = res.ok ? 'ok' : `${res.status} ${(await res.text()).slice(0, 120)}`;
   }
