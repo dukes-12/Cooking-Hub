@@ -227,26 +227,39 @@ export async function fetchProductHead(url, maxBytes = 2_500_000) {
   if (!res.ok || !res.body) throw new Error(`${res.status}`);
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
+  // Avant le bloc de prix, on ne garde que la fin du texte lu (pas de chaîne de plusieurs Mo à construire).
   let text = '';
   let bytes = 0;
   let foundAt = -1;
+  // Prix des données structurées (repli quand la page n'a pas de bloc de prix reconnu).
+  let extra = '';
   for (;;) {
     const { value, done } = await reader.read();
     if (done) break;
     bytes += value.length;
-    text += decoder.decode(value, { stream: true });
+    const chunk = decoder.decode(value, { stream: true });
     if (foundAt < 0) {
+      text = text.slice(-400) + chunk;
+      if (!extra) for (const m of ['"offers"', 'class="value"']) {
+        const i = text.indexOf(m);
+        if (i >= 0 && text.length - i > 300) extra = text.slice(i, i + 300);
+      }
       for (const m of PRICE_MARKERS) {
-        const i = text.indexOf(m, Math.max(0, text.length - value.length - 64));
+        const i = text.indexOf(m);
         if (i >= 0 && (foundAt < 0 || i < foundAt)) foundAt = i;
       }
-    }
-    if ((foundAt >= 0 && text.length > foundAt + 3000) || bytes > maxBytes) {
+      if (foundAt >= 0) {
+        text = text.slice(foundAt);
+        foundAt = 0;
+      } else if (bytes > maxBytes) break;
+    } else text += chunk;
+    if (foundAt >= 0 && text.length > 3000) {
       await reader.cancel().catch(() => undefined);
       break;
     }
   }
-  return text;
+  if (foundAt < 0) await reader.cancel().catch(() => undefined);
+  return foundAt < 0 ? extra : `${text}\n${extra}`;
 }
 
 async function fetchText(url) {
@@ -409,7 +422,9 @@ export async function runScraper(env, now = new Date()) {
       return `prix : ${state.queue.length} pages à lire`;
     }
     if (state.current && now - (state.current.startedAt ?? 0) < 5 * 60000) return 'passage précédent en cours';
-    const batch = state.queue.splice(0, PAGES_PER_RUN);
+    // Pages Continente très lourdes : 2 au plus par passage.
+    const batch = [];
+    while (state.queue.length && batch.length < PAGES_PER_RUN && batch.filter((b) => b.chain === 'pt-continente').length < 2) batch.push(state.queue.shift());
     state.current = { prices: true, startedAt: now.getTime() };
     await kv.put('scrape:state', JSON.stringify(state));
     for (const { chain, id, url } of batch) {

@@ -620,4 +620,20 @@ describe('lecture partielle des pages produit', () => {
       globalThis.fetch = orig;
     }
   });
+
+  it('garde le prix des données structurées quand la page n’a pas de bloc de prix', async () => {
+    const { fetchProductHead, parseProductPage } = await import('../worker/scraper.js');
+    const page = '<html>' + 'x'.repeat(30000) + '<script>{"offers": {"@type":"Offer","price":"2.38"}}</script>' + 'y'.repeat(100000) + '</html>';
+    const orig = globalThis.fetch;
+    let sent = 0;
+    globalThis.fetch = (async () => new Response(new ReadableStream({ pull(c) { if (sent >= page.length) return c.close(); c.enqueue(new TextEncoder().encode(page.slice(sent, sent + 8192))); sent += 8192; } }))) as typeof fetch;
+    try {
+      const url = 'https://www.pingodoce.pt/produtos/arroz-carolino-1kg-1.html';
+      const html = await fetchProductHead(url);
+      expect(html.length).toBeLessThan(1000);
+      expect(parseProductPage(html, url)).toEqual({ perKg: 2.38 });
+    } finally {
+      globalThis.fetch = orig;
+    }
+  });
 });
