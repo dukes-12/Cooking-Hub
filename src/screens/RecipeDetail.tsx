@@ -1,6 +1,7 @@
 import { useChainPrices } from '../lib/chainprices';
 import { useEffect, useMemo, useState } from 'react';
 import { importFromUrl } from '../lib/importer';
+import { deleteRecipePhoto, saveRecipePhoto, useRecipePhoto } from '../lib/recipePhotos';
 import { loadCommunityPrices, useCommunityPrices } from '../lib/openprices';
 import { RecipeVisual, SourceBadge, StatusBadge } from '../components/RecipeCard';
 import { Empty, Sheet, Stepper } from '../components/ui';
@@ -63,6 +64,7 @@ export function RecipeView({ recipe, preview, onSave }: { recipe: Recipe; previe
         <RecipeVisual recipe={recipe} size="lg" />
         <div className="hero-actions">
           <button className="icon-btn glass" onClick={() => back()} aria-label="Retour">←</button>
+          {!preview && <PhotoButton recipe={recipe} />}
           {!preview && (
             <button className={`icon-btn glass ${fav ? 'is-fav' : ''}`} onClick={() => actions.toggleFavorite(recipe.id)} aria-label="Favori">
               {fav ? '♥' : '♡'}
@@ -72,6 +74,7 @@ export function RecipeView({ recipe, preview, onSave }: { recipe: Recipe; previe
       </div>
 
       <div className="recipe-body">
+        <PhotoCredit recipe={recipe} />
         <p className="small muted">{recipe.cuisine} · <SourceBadge recipe={recipe} long /></p>
         <h1>{recipe.title}</h1>
         <StatusBadge a={a} />
@@ -263,4 +266,49 @@ function SourceSteps({ recipe }: { recipe: Recipe }) {
       <p className="small muted">« Enregistrer » importe la recette complète dans tes recettes, sur ton appareil uniquement.</p>
     </div>
   );
+}
+
+/** Prendre ou choisir sa propre photo du plat (gardée sur l'appareil), ou la retirer. */
+function PhotoButton({ recipe }: { recipe: Recipe }) {
+  const photo = useRecipePhoto(recipe);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const pick = async (file?: File) => {
+    if (!file) return;
+    setBusy(true);
+    try {
+      await saveRecipePhoto(recipe.id, file);
+      setOpen(false);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <button className="icon-btn glass push-right" onClick={() => setOpen(true)} aria-label="Photo de la recette">📷</button>
+      <Sheet open={open} onClose={() => setOpen(false)} title="Photo de la recette">
+        <p className="small muted">Ta photo remplace celle du site ou de Wikimedia, sur ce téléphone uniquement.</p>
+        <div className="row gap">
+          <label className="btn btn-primary grow">
+            {busy ? 'Enregistrement…' : '📷 Prendre une photo'}
+            <input type="file" accept="image/*" capture="environment" hidden onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ''; }} />
+          </label>
+          <label className="btn btn-soft grow">
+            🖼️ Galerie
+            <input type="file" accept="image/*" hidden onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ''; }} />
+          </label>
+        </div>
+        {photo?.kind === 'mine' && (
+          <button className="btn btn-ghost btn-block" onClick={async () => { await deleteRecipePhoto(recipe.id); setOpen(false); }}>Retirer ma photo</button>
+        )}
+      </Sheet>
+    </>
+  );
+}
+
+/** Mention obligatoire pour les photos libres de Wikimedia Commons. */
+function PhotoCredit({ recipe }: { recipe: Recipe }) {
+  const photo = useRecipePhoto(recipe);
+  if (photo?.kind !== 'wiki' || !photo.credit) return null;
+  return <a className="small muted credit" href={photo.credit} target="_blank" rel="noreferrer">Photo : Wikimedia Commons</a>;
 }

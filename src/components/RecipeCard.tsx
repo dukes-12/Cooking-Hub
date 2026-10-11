@@ -1,5 +1,6 @@
 import { useChainPrices } from '../lib/chainprices';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { useRecipePhoto } from '../lib/recipePhotos';
 import { adaptRecipe, scoreRecipe, type Adapted, type Match } from '../lib/adapt';
 import { useCommunityPrices } from '../lib/openprices';
 import { fmtMoney } from '../lib/pricing';
@@ -18,9 +19,11 @@ export function useMatches(): Match[] {
 }
 
 export function RecipeVisual({ recipe, size = 'md' }: { recipe: Recipe; size?: 'sm' | 'md' | 'lg' }) {
+  const photo = useRecipePhoto(recipe);
+  const [broken, setBroken] = useState(false);
   return (
     <div className={`visual visual-${size}`} style={{ ['--tint' as string]: recipe.color }}>
-      {recipe.image ? <img src={recipe.image} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <span aria-hidden>{recipe.emoji}</span>}
+      {photo && !broken ? <img src={photo.url} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(true)} /> : <span aria-hidden>{recipe.emoji}</span>}
     </div>
   );
 }

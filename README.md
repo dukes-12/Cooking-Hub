@@ -35,6 +35,7 @@ Test local de l'environnement Cloudflare : `npm run preview:cf`. Déploiement ma
 | **Découvrir** | Pile de cartes à swiper : → favori, ← passer, ↑ ajouter au menu. Classées par score de compatibilité (goûts, temps, budget, frigo, calories). |
 | **Recherche** (🔍 depuis Découvrir) | Texte + filtres (type de plat, cuisine, temps, prix/portion, calories, « avec ce que j'ai »), tri par pertinence / prix / temps / calories. |
 | **Fiche recette** | Format uniformisé : temps, kcal, coût/portion, difficulté, ingrédients mis à l'échelle, état frigo de chaque ingrédient, remplacements (⇄), comparatif de prix par enseigne, macros, étapes cochables, « J'ai cuisiné » (décompte le frigo). |
+| **Photos des recettes** | Ta photo (📷 sur la fiche, gardée sur l'appareil dans IndexedDB) › photo du site d'origine › photo libre du plat sur Wikimedia Commons (recherche Wikidata par nom exact, FR/PT/EN, avec crédit) › émoji. |
 | **Recettes** | Menu de la semaine (portions, coût total), favoris, recettes importées. |
 | **Frigo** | Inventaire par rayon + suggestions « à cuisiner avec ce que tu as ». |
 | **Courses** | Liste générée depuis le menu, moins le frigo et le placard, triée par rayon ; meilleure enseigne, économie possible en partageant entre 2 enseignes ; **mode magasin** plein écran (gros boutons, écran maintenu allumé, hors-ligne) ; les articles achetés vont dans le frigo. |
