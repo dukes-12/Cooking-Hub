@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AISLE_LABELS, getIngredient } from '../data/ingredients';
 import { readBarcodeFromFile } from '../lib/barcode';
+import { baseIdForName } from '../lib/canonical';
 import { makeCustomProduct, type Nutrition } from '../lib/custom';
 import { readPackLabel, type PackLabel } from '../lib/label';
 import { fetchProductByCode, type OffProduct } from '../lib/off';
@@ -50,7 +51,8 @@ export function ProductForm({ seed, editing, onDone, onCancel }: { seed?: Produc
   const { actions } = useApp();
   const seedFamily = seed?.familyId ? getIngredient(seed.familyId) : undefined;
   const [name, setName] = useState(editing?.name ?? seed?.name ?? '');
-  const [familyId, setFamilyId] = useState<string | undefined>(editing ? editing.family : seedFamily?.custom ? seedFamily.family : seedFamily?.id);
+  // Sans famille donnée : celle que le nom indique (« Parmesan râpé » → Parmesan).
+  const [familyId, setFamilyId] = useState<string | undefined>(editing ? editing.family : seedFamily?.custom ? seedFamily.family : seedFamily?.id ?? baseIdForName(seed?.name ?? ''));
   const [aisle, setAisle] = useState<Aisle>(editing?.aisle ?? 'epicerie');
   const [unit, setUnit] = useState<BaseUnit>(editing?.unit ?? 'g');
   const [barcode, setBarcode] = useState(editing?.barcode ?? seed?.barcode ?? '');

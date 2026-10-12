@@ -1,5 +1,6 @@
+import { baseIdForName } from '../lib/canonical';
 import { useMemo, useState, type ReactNode } from 'react';
-import { customIngredients, INGREDIENTS } from '../data/ingredients';
+import { customIngredients, getIngredient, INGREDIENTS } from '../data/ingredients';
 import { ingredientFromEntry, searchLexicon, useLexiconReady } from '../lib/lexicon';
 import { normalize } from '../lib/text';
 import type { Ingredient } from '../types';
@@ -104,7 +105,10 @@ export function IngredientPicker({ onPick, exclude = [], placeholder = 'Recherch
     const extra = (lexReady ? searchLexicon(q, 8) : [])
       .map(ingredientFromEntry)
       .filter((i) => !seen.has(i.id) && !exclude.includes(i.id));
-    return [...own, ...extra].slice(0, 8);
+    // « parmesan râpé », « courgette bio » : l'aliment de base est proposé.
+    const base = baseIdForName(q);
+    const baseIng = base && !seen.has(base) && !exclude.includes(base) ? getIngredient(base) : undefined;
+    return [...own, ...(baseIng ? [baseIng] : []), ...extra.filter((i) => i.id !== base)].slice(0, 8);
   }, [q, exclude, lexReady]);
 
   const pick = (ing: Ingredient | null) => {

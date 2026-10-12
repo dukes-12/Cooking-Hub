@@ -5,6 +5,7 @@ import { getChain } from './data/reference';
 import { labelKey } from './lib/custom';
 import { useLexiconReady } from './lib/lexicon';
 import { fromHarvestedRecipe, mergeDuplicates } from './lib/importer';
+import { sameFood } from './lib/canonical';
 import { addToFridge, dateIn, defaultShelfDays, presenceOnly } from './lib/pantry';
 import type { AppState, ChosenStore, FridgeItem, Ingredient, PlannedMeal, Profile, Receipt, ReceiptLine, Recipe, ShoppingItem } from './types';
 import { observationsFromReceipts } from './lib/receipts';
@@ -228,14 +229,21 @@ function useStore() {
 }
 
 function consume(fridge: FridgeItem[], used: { ingredientId: string; qty: number }[]): FridgeItem[] {
-  return fridge
-    .map((f) => {
+  // Chaque quantité utilisée est retirée de l'aliment correspondant au frigo (variantes comprises : parmesan râpé…).
+  const left = fridge.map((f) => ({ ...f }));
+  for (const u of used) {
+    let rest = u.qty;
+    for (const f of left) {
+      if (rest <= 0) break;
+      if (!sameFood(f.ingredientId, u.ingredientId)) continue;
       // Épices, huiles, sauces… : on en a toujours après avoir cuisiné.
-      if (presenceOnly(getIngredient(f.ingredientId))) return f;
-      const u = used.filter((x) => x.ingredientId === f.ingredientId).reduce((s, x) => s + x.qty, 0);
-      return u ? { ...f, qty: f.qty - u } : f;
-    })
-    .filter((f) => f.qty > 0.01);
+      if (presenceOnly(getIngredient(f.ingredientId))) continue;
+      const take = Math.min(f.qty, rest);
+      f.qty -= take;
+      rest -= take;
+    }
+  }
+  return left.filter((f) => f.qty > 0.01);
 }
 
 /** Ingrédients cités plusieurs fois réunis (recettes importées avant cette règle). */

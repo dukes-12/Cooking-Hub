@@ -1,6 +1,7 @@
 import { AISLE_LABELS, getIngredient } from '../data/ingredients';
 import type { FridgeItem, PlannedMeal, Profile, Recipe, ShoppingItem } from '../types';
 import { adaptRecipe } from './adapt';
+import { sameFood } from './canonical';
 import { presenceOnly } from './pantry';
 import { roundForShopping } from './units';
 
@@ -46,7 +47,7 @@ export function buildShoppingList(
   const items: ShoppingItem[] = [];
   for (const it of acc.values()) {
     if (it.ingredientId && it.qty != null && it.unit) {
-      const have = fridge.filter((f) => f.ingredientId === it.ingredientId).reduce((s, f) => s + f.qty, 0);
+      const have = fridge.filter((f) => sameFood(f.ingredientId, it.ingredientId!)).reduce((s, f) => s + f.qty, 0);
       if (have > 0 && presenceOnly(getIngredient(it.ingredientId))) continue;
       const need = it.qty - have;
       if (need <= (it.unit === 'pc' ? 0.2 : it.qty * 0.05)) continue;

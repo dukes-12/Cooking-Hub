@@ -1,5 +1,6 @@
 import { getIngredient } from '../data/ingredients';
 import { ALLERGENS, DIETS, EQUIPMENT, EQUIPMENT_ALTERNATIVES, SPEEDS } from '../data/reference';
+import { sameFood } from './canonical';
 import { isSoon, presenceOnly } from './pantry';
 import type { Equipment, FoodTag, FridgeItem, Ingredient, Profile, Recipe, RecipeIngredient } from '../types';
 import { costOf, quoteBasket, type BasketQuote } from './pricing';
@@ -91,8 +92,9 @@ function compatibleSubs(ing: Ingredient, profile: Profile, excluded: Map<FoodTag
     .filter((s): s is Ingredient => !!s && !incompatibility(s, profile, excluded) && !profile.disliked.includes(s.id));
 }
 
+/** Quantité au frigo d'un aliment, variantes comprises (parmesan râpé pour du parmesan…). */
 function fridgeQty(fridge: FridgeItem[], id: string): number {
-  return fridge.filter((f) => f.ingredientId === id).reduce((s, f) => s + f.qty, 0);
+  return fridge.filter((f) => sameFood(f.ingredientId, id)).reduce((s, f) => s + f.qty, 0);
 }
 
 export function adaptRecipe(
@@ -220,7 +222,7 @@ export function adaptRecipe(
   const fridgeCoverage = needed.length ? have / needed.length : 0;
   const missingCount = needed.filter((l) => l.fridge === 'none' && !l.fridgeSwap).length;
   const soon = new Set(fridge.filter((f) => isSoon(f)).map((f) => f.ingredientId));
-  const expiring = [...new Set(active.filter((l) => l.ingredient && soon.has(l.ingredient.id) && !presenceOnly(l.ingredient)).map((l) => l.ingredient!.name))];
+  const expiring = [...new Set(active.filter((l) => l.ingredient && [...soon].some((id) => sameFood(id, l.ingredient!.id)) && !presenceOnly(l.ingredient)).map((l) => l.ingredient!.name))];
 
   const totalMin = recipe.prepMin == null && recipe.cookMin == null ? null : (recipe.prepMin ?? 0) + (recipe.cookMin ?? 0);
 

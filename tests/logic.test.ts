@@ -756,3 +756,24 @@ describe('ingrédients en double', () => {
     expect(m).toHaveLength(5);
   });
 });
+
+describe('variantes d’un aliment', () => {
+  it('reconnaît « parmesan râpé » comme du parmesan, au frigo et dans les recettes', async () => {
+    const { baseIdForName, sameFood } = await import('../src/lib/canonical');
+    const { makeCustomProduct } = await import('../src/lib/custom');
+    const { setCustomIngredients } = await import('../src/data/ingredients');
+    const { adaptRecipe } = await import('../src/lib/adapt');
+    expect(baseIdForName('Parmesan râpé')).toBe('parmesan');
+    expect(baseIdForName('Lait demi-écrémé pasteurisé')).toBe('lait');
+    expect(baseIdForName('Beurre de cacahuète')).not.toBe('beurre');
+    expect(sameFood('lex:grated-emmental-cheese', 'emmental')).toBe(true);
+    // Produit créé sans famille, à partir de son nom.
+    const mine = { ...makeCustomProduct({ name: 'Parmesan râpé', aisle: 'cremerie', unit: 'g' }) };
+    setCustomIngredients([mine]);
+    expect(sameFood(mine.id, 'parmesan')).toBe(true);
+    const r = SEED_RECIPES.find((x) => x.ingredients.some((i) => i.ingredientId === 'parmesan'))!;
+    const a = adaptRecipe(r, { ...DEFAULT_PROFILE, equipment: ['stovetop', 'oven'] }, [{ ingredientId: mine.id, qty: 200, addedAt: 0 }]);
+    expect(a.lines.find((l) => l.ingredient?.id === 'parmesan')?.fridge).toBe('full');
+    setCustomIngredients([]);
+  });
+});
