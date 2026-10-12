@@ -110,6 +110,8 @@ export interface Recipe {
   cookMin: number | null;
   difficulty: 1 | 2 | 3;
   equipment: Equipment[];
+  /** Autres cuissons prévues par la recette elle-même (« ou à la poêle »), avec la phrase qui le dit. */
+  equipmentAlt?: Partial<Record<Equipment, { with: Equipment; tip: string }[]>>;
   ingredients: RecipeIngredient[];
   steps: string[];
   source?: { name: string; url?: string };

@@ -4,6 +4,7 @@
 // robots.txt ; peu de pages par semaine. Droit d'auteur : on ne garde que les faits (titre, ingrédients,
 // temps, portions, calories, lien vers la photo) et le lien vers la recette d'origine — le texte des
 // étapes reste sur le site source, que l'appli ouvre d'un geste.
+import { detectEquipment } from '../src/lib/equipment.ts';
 import { extractRecipe } from '../server/core.mjs';
 import { streamLocs } from './scraper.js';
 
@@ -34,21 +35,14 @@ const text = (v) => (typeof v === 'string' ? v : Array.isArray(v) ? text(v[0]) :
 /** Tout le texte d'une valeur schema.org (étapes, sections…), à plat. */
 const allText = (v) => (typeof v === 'string' ? v : Array.isArray(v) ? v.map(allText).join(' ') : v && typeof v === 'object' ? [v.name, v.text, allText(v.itemListElement ?? '')].filter(Boolean).join(' ') : '');
 
-/**
- * Appareils nécessaires, lus dans le titre et les étapes (gardés car le texte des étapes ne l'est pas).
- * Même règle que guessEquipment côté appli (src/lib/importer.ts).
- */
-export function detectEquipment(textAll) {
-  const t = textAll.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  const eq = [];
-  if (/\bfours?\b|enfourn|\bforno\b|pre-?aquec|preheat|\boven\b/.test(t)) eq.push('oven');
-  if (/air ?fryer|airfryer|friteuse a air/.test(t)) eq.push('airfryer');
-  if (/micro.?ondas?|microwave/.test(t)) eq.push('microwave');
-  if (/\bmixe|blender|mixeur|liquidific|varinha/.test(t)) eq.push('blender');
-  if (/batteur|fouet electrique|batedeira|stand mixer/.test(t)) eq.push('mixer');
-  if (/poele|casserole|cocotte|\bfeu\b|frigideira|tacho|panela|\bwok\b|lume|saucepan|skillet/.test(t)) eq.push('stovetop');
-  return eq;
+/** Appareils nécessaires et cuissons de remplacement prévues par la recette (gardés car les étapes ne le sont pas). */
+export function recipeEquipment(r) {
+  const { equipment, alternatives } = detectEquipment([r.name, r.description, r.keywords, allText(r.recipeInstructions)].map((x) => (typeof x === 'string' ? x : '')).join('\n'));
+  return { equipment, ...(Object.keys(alternatives).length ? { equipmentAlt: alternatives } : {}), eqv: EQUIPMENT_VERSION };
 }
+
+/** Version de la détection : les recettes lues avec une version plus ancienne sont relues. */
+const EQUIPMENT_VERSION = 2;
 
 export function compactRecipe(r, url, source) {
   const ingredients = (Array.isArray(r.recipeIngredient) ? r.recipeIngredient : []).map((x) => String(x).trim()).filter(Boolean);
@@ -67,7 +61,7 @@ export function compactRecipe(r, url, source) {
     image: text(r.image) || null,
     nutrition: r.nutrition?.calories ? { calories: text(r.nutrition.calories) } : null,
     stepCount: steps,
-    equipment: detectEquipment([r.name, r.description, r.keywords, allText(r.recipeInstructions)].map((x) => (typeof x === 'string' ? x : '')).join(' ')),
+    ...recipeEquipment(r),
     url,
     source,
   };
@@ -101,32 +95,31 @@ export async function runRecipes(env, now = new Date()) {
   state.current = now.getTime();
   await kv.put('recipes:state', JSON.stringify(state));
   // Index léger : adresses déjà récoltées et nombre de morceaux "recipes:chunk:N".
-  const index = (await kv.get('recipes:index', 'json')) ?? { chunks: 0, count: 0, urls: [], equipDone: true };
+  const index = (await kv.get('recipes:index', 'json')) ?? { chunks: 0, count: 0, urls: [], equipV: EQUIPMENT_VERSION };
   const known = new Set([...index.urls, ...(state.failed ?? [])]);
   let msg = 'recettes : rien à faire cette semaine';
 
   try {
-    if (index.count && !index.equipDone) {
+    if (index.count && index.equipV !== EQUIPMENT_VERSION) {
       // Recettes récoltées avant la détection des appareils : on relit leur page (5 par passage).
       let todo = PAGES_PER_RUN;
       for (let n = 0; n < index.chunks && todo > 0; n++) {
         const chunk = (await kv.get(`recipes:chunk:${n}`, 'json')) ?? [];
         let changed = false;
         for (const c of chunk) {
-          if (c.equipment || todo <= 0) continue;
+          if (c.eqv === EQUIPMENT_VERSION || todo <= 0) continue;
           todo--;
           try {
-            const r = extractRecipe(await fetchText(c.url));
-            c.equipment = r ? detectEquipment([r.name, r.description, r.keywords, allText(r.recipeInstructions)].map((x) => (typeof x === 'string' ? x : '')).join(' ')) : detectEquipment(c.name);
+            Object.assign(c, recipeEquipment(extractRecipe(await fetchText(c.url)) ?? { name: c.name }));
           } catch {
-            c.equipment = detectEquipment(c.name);
+            Object.assign(c, recipeEquipment({ name: c.name }));
           }
           changed = true;
         }
         if (changed) await kv.put(`recipes:chunk:${n}`, JSON.stringify(chunk));
       }
       if (todo > 0) {
-        index.equipDone = true;
+        index.equipV = EQUIPMENT_VERSION;
         await kv.put('recipes:index', JSON.stringify(index));
       }
       msg = `recettes : appareils relus (${PAGES_PER_RUN - todo})`;

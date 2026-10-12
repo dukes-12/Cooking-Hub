@@ -1,3 +1,4 @@
+import { detectEquipment } from './equipment';
 import { getIngredient, INGREDIENTS } from '../data/ingredients';
 import { cuisineFromText } from '../data/reference';
 import { findInTextDetailed, ingredientFromEntry } from './lexicon';
@@ -195,18 +196,8 @@ function guessCategory(r: Record<string, unknown>): Category {
   return 'plat';
 }
 
-/** Appareils nécessaires d'après le texte (même règle que detectEquipment dans worker/recipes.js). */
-export function guessEquipment(all: string): Equipment[] {
-  const t = normalize(all);
-  const eq = new Set<Equipment>();
-  if (/\bfours?\b|enfourn|\bforno\b|pre-?aquec|preheat|\boven\b/.test(t)) eq.add('oven');
-  if (/air ?fryer|airfryer|friteuse a air/.test(t)) eq.add('airfryer');
-  if (/micro.?ondas?|microwave/.test(t)) eq.add('microwave');
-  if (/\bmixe|blender|mixeur|liquidific|varinha/.test(t)) eq.add('blender');
-  if (/batteur|fouet electrique|batedeira|stand mixer/.test(t)) eq.add('mixer');
-  if (/poele|casserole|cocotte|\bfeu\b|frigideira|tacho|panela|\bwok\b|lume|faire revenir|bouillir|frying pan|saucepan|skillet/.test(t)) eq.add('stovetop');
-  return [...eq];
-}
+/** Appareils nécessaires d'après le texte (sans les cuissons de remplacement). */
+export const guessEquipment = (all: string): Equipment[] => detectEquipment(all).equipment;
 
 /** Plats qui se cuisent au four, pour les recettes dont on n'a pas le texte des étapes. */
 const OVEN_DISHES = /gateau|g[aâ]teau|coulant|fondant|brownie|cookie|muffin|cake\b|tarte|quiche|gratin|clafoutis|cheesecake|madeleine|financier|souffle|lasagn|pizza|roti\b|au four|bolo\b|assad|empad|pao de|folar|pastel de nata|gratinad/;
@@ -242,7 +233,10 @@ export function fromSchemaRecipe(r: Record<string, unknown>, url?: string, siteN
     prepMin: prep ?? (total && cook ? total - cook : total),
     cookMin: cook,
     difficulty: stepList.length > 7 || ingredientsRaw.length > 12 ? 2 : 1,
-    equipment: guessEquipment(stepList.join(' ')),
+    ...(() => {
+      const d = detectEquipment([title, ...stepList].join('\n'));
+      return { equipment: d.equipment, ...(Object.keys(d.alternatives).length ? { equipmentAlt: d.alternatives } : {}) };
+    })(),
     ingredients: ingredientsRaw.map(parseIngredientLine),
     steps: stepList,
     source: { name: siteName ?? (url ? new URL(url).hostname.replace(/^www\./, '') : 'Import'), url },
@@ -323,7 +317,8 @@ export function fromHarvestedRecipe(r: Record<string, unknown> & { url: string; 
     const equipment: Equipment[] = Array.isArray(r.equipment)
       ? (r.equipment as Equipment[])
       : [...new Set<Equipment>([...guessEquipment(`${rec.title} ${text(r.keywords)}`), ...(OVEN_DISHES.test(normalize(`${rec.title} ${text(r.keywords)}`)) ? (['oven'] as Equipment[]) : [])])];
-    return { ...rec, id: stableId(r.url), imported: false, steps: [], stepCount: r.stepCount ?? undefined, equipment };
+    const equipmentAlt = r.equipmentAlt as Recipe['equipmentAlt'];
+    return { ...rec, id: stableId(r.url), imported: false, steps: [], stepCount: r.stepCount ?? undefined, equipment, ...(equipmentAlt ? { equipmentAlt } : {}) };
   } catch {
     return null;
   }

@@ -1,3 +1,4 @@
+import { detectEquipment } from '../lib/equipment';
 import type { Recipe, RecipeIngredient, Unit } from '../types';
 import { INGREDIENT_BY_ID } from './ingredients';
 import { cuisineFromText } from './reference';
@@ -355,3 +356,9 @@ export const SEED_RECIPES: Recipe[] = [
 ];
 
 for (const r of SEED_RECIPES) r.origin ??= cuisineFromText(r.cuisine);
+
+// Cuissons de remplacement écrites dans les étapes (« ou une poêle ») : gardées pour qui n'a pas le four.
+for (const r of SEED_RECIPES) {
+  const { alternatives } = detectEquipment(r.steps.join('\n'));
+  if (Object.keys(alternatives).length) r.equipmentAlt = alternatives;
+}

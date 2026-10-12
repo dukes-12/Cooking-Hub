@@ -176,7 +176,9 @@ export function adaptRecipe(
   const equipment: EquipmentNote[] = [];
   for (const eq of recipe.equipment) {
     if (profile.equipment.includes(eq)) continue;
-    const alt = EQUIPMENT_ALTERNATIVES[eq]?.find((a) => profile.equipment.includes(a.with));
+    // D'abord ce que la recette prévoit elle-même (« ou à la poêle »), cité tel quel.
+    const own = recipe.equipmentAlt?.[eq]?.find((a) => profile.equipment.includes(a.with));
+    const alt = own ? { with: own.with, tip: `D'après la recette : « ${own.tip} »` } : EQUIPMENT_ALTERNATIVES[eq]?.find((a) => profile.equipment.includes(a.with));
     equipment.push({ missing: eq, alternative: alt?.with, tip: alt?.tip });
     if (!alt) issues.push(`Nécessite : ${EQUIPMENT[eq].label}`);
   }

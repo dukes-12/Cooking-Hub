@@ -79,8 +79,24 @@ describe('adaptation', () => {
     expect(a.issues).toContain('Nécessite : Four');
   });
 
+  it('garde la cuisson de remplacement que la recette prévoit elle-même', async () => {
+    const { detectEquipment } = await import('../src/lib/equipment');
+    const croque = detectEquipment('Beurrez les tranches de pain. Enfournez 10 min à 200°C.\nVous pouvez aussi les faire cuire à la poêle, 3 min de chaque côté.');
+    expect(croque.equipment).toContain('oven');
+    expect(croque.alternatives.oven?.[0]).toMatchObject({ with: 'stovetop', tip: 'Vous pouvez aussi les faire cuire à la poêle, 3 min de chaque côté.' });
+    expect(detectEquipment('Cuire au four ou à la poêle 10 minutes.').alternatives.oven?.[0].with).toBe('stovetop');
+    expect(detectEquipment('Leve ao forno ou à air fryer durante 15 minutos.').alternatives.oven?.[0].with).toBe('airfryer');
+    // Deux cuissons qui se suivent : pas une alternative.
+    expect(detectEquipment('Faites revenir les oignons à la poêle. Enfournez 30 min.').alternatives).toEqual({});
+    const r = { ...recipe('saumon-four-legumes'), equipmentAlt: croque.alternatives };
+    const a = adaptRecipe(r, profile({ equipment: ['stovetop'] }), []);
+    expect(a.status).not.toBe('incompatible');
+    expect(a.equipment[0].tip).toContain('D’après la recette'.replace('’', "'"));
+  });
+
   it('repère le four dans les recettes récoltées', async () => {
-    const { detectEquipment } = await import('../worker/recipes.js');
+    const { detectEquipment: detect } = await import('../src/lib/equipment');
+    const detectEquipment = (t: string) => detect(t).equipment;
     const { fromHarvestedRecipe, guessEquipment } = await import('../src/lib/importer');
     expect(detectEquipment('Préchauffez le four à 180°C. Enfournez 10 min.')).toContain('oven');
     expect(detectEquipment('Pré-aqueça o forno a 200 ºC')).toContain('oven');
