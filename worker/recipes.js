@@ -1,4 +1,4 @@
-// Récolte hebdomadaire de recettes (Teleculinária pour le Portugal, Marmiton pour la France).
+// Récolte hebdomadaire de recettes (Teleculinária pour le Portugal ; Marmiton, CuisineAZ et Jow pour la France).
 //
 // Respect des sites : uniquement les plans du site (sitemaps) et les pages recette, autorisés par leurs
 // robots.txt ; peu de pages par semaine. Droit d'auteur : on ne garde que les faits (titre, ingrédients,
@@ -21,6 +21,19 @@ export const SOURCES = [
     name: 'Marmiton',
     index: 'https://www.marmiton.org/wsitemap_recipes_index.xml',
     page: /^https:\/\/www\.marmiton\.org\/recettes\/recette_[^/]+\.aspx$/,
+  },
+  {
+    id: 'cuisineaz',
+    name: 'CuisineAZ',
+    sitemaps: Array.from({ length: 10 }, (_, i) => `https://www.cuisineaz.com/xml/sitemap-cuisineaz-recette-${i + 1}.xml`),
+    // robots.txt : pas d'adresses avec « -- », apostrophe ou commençant par « recette(s)-<chiffre> ».
+    page: /^https:\/\/www\.cuisineaz\.com\/recettes\/(?!recettes?-\d)(?!.*--)[a-z0-9-]+-\d+\.aspx$/,
+  },
+  {
+    id: 'jow',
+    name: 'Jow',
+    sitemaps: ['https://jow.fr/sitemap.xml'],
+    page: /^https:\/\/jow\.fr\/recipes\/[a-z0-9-]+$/,
   },
 ];
 const PER_SOURCE_PER_WEEK = 40;
@@ -91,6 +104,12 @@ export async function runRecipes(env, now = new Date()) {
     Object.assign(state, { week, phase: 'collect', queue: [], exhausted: {}, quota: Object.fromEntries(SOURCES.map((s) => [s.id, PER_SOURCE_PER_WEEK])), tries: 0, current: null });
     await kv.put('recipes:state', JSON.stringify(state));
     return `recettes : semaine ${week}`;
+  }
+  // Source ajoutée en cours de semaine : elle reçoit son quota et la récolte reprend.
+  for (const src of SOURCES) {
+    if (state.quota[src.id] != null) continue;
+    state.quota[src.id] = PER_SOURCE_PER_WEEK;
+    if (state.phase !== 'fetch') state.phase = 'collect';
   }
   state.current = now.getTime();
   await kv.put('recipes:state', JSON.stringify(state));

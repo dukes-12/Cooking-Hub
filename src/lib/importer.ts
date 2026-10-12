@@ -308,8 +308,8 @@ function stableId(url: string): string {
  */
 export function fromHarvestedRecipe(r: Record<string, unknown> & { url: string; source: string; stepCount?: number }): Recipe | null {
   try {
-    // Sans cuisine déclarée : celle du site (Teleculinária → portugaise, Marmiton → française).
-    const siteCuisine = /teleculinaria/i.test(r.url) ? 'Portugaise' : /marmiton/i.test(r.url) ? 'Française' : undefined;
+    // Sans cuisine déclarée : celle du site (Teleculinária → portugaise, Marmiton et CuisineAZ → française).
+    const siteCuisine = /teleculinaria/i.test(r.url) ? 'Portugaise' : /marmiton|cuisineaz/i.test(r.url) ? 'Française' : undefined;
     const rec = fromSchemaRecipe({ ...r, recipeCuisine: r.recipeCuisine || siteCuisine }, r.url, r.source);
     const known = rec.ingredients.filter((i) => i.ingredientId).length;
     if (!rec.ingredients.length || known / rec.ingredients.length < 0.6) return null;
