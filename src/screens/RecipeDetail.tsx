@@ -41,6 +41,7 @@ export function RecipeView({ recipe, preview, onSave }: { recipe: Recipe; previe
   const [cooked, setCooked] = useState(false);
   const [cookedSheet, setCookedSheet] = useState(false);
   const [showPrice, setShowPrice] = useState(false);
+  const [cookChoice, setCookChoice] = useState(false);
 
   const community = useCommunityPrices() + useChainPrices();
   useEffect(() => {
@@ -189,7 +190,7 @@ export function RecipeView({ recipe, preview, onSave }: { recipe: Recipe; previe
           <button className="btn btn-soft grow" onClick={() => go('/fridge')}>✅ Frigo mis à jour · voir</button>
         ) : (
           <>
-            <button className="btn btn-soft" onClick={() => go(`/cook/${recipe.id}`)}>👩‍🍳 Cuisiner</button>
+            <button className="btn btn-soft" onClick={() => setCookChoice(true)}>👩‍🍳 Cuisiner</button>
             <button
               className="btn btn-primary grow"
               onClick={() => {
@@ -203,6 +204,19 @@ export function RecipeView({ recipe, preview, onSave }: { recipe: Recipe; previe
           </>
         )}
       </div>
+
+      <Sheet open={cookChoice} onClose={() => setCookChoice(false)} title="Cuisiner cette recette">
+        <div className="new-product">
+          <button className="choice-card" onClick={() => { setCookChoice(false); go(`/cook/${recipe.id}`); }}>
+            <b>⏱ Suivre pas à pas</b>
+            <span className="small muted">Une étape à la fois en grand, minuteurs, écran toujours allumé. Le frigo est mis à jour à la fin.</span>
+          </button>
+          <button className="choice-card" onClick={() => { setCookChoice(false); setCookedSheet(true); }}>
+            <b>✓ J’ai déjà cuisiné</b>
+            <span className="small muted">Directement à la mise à jour du frigo, en ajustant ce que tu as utilisé.</span>
+          </button>
+        </div>
+      </Sheet>
 
       <CookedSheet adapted={a} open={cookedSheet} onClose={() => setCookedSheet(false)} onDone={() => { setCookedSheet(false); setCooked(true); }} />
 

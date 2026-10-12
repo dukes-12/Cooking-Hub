@@ -455,3 +455,8 @@ div.ticket > .ticket-line.is-unmatched { border-left-color: var(--warn); }
 .breakdown-table td:nth-child(2), .breakdown-table td:nth-child(3), .breakdown-table td:nth-child(4), .breakdown-table th:nth-child(4) { white-space: nowrap; }
 .breakdown-table td:last-child, .breakdown-table th:last-child { text-align: right; }
 .breakdown-table tfoot td { border-bottom: 0; }
+.choice-card { display: flex; flex-direction: column; gap: 0.25rem; text-align: left; background: var(--surface); border: 1.5px solid var(--line); border-radius: 16px; padding: 0.9rem 1rem; color: inherit; font: inherit; cursor: pointer; }
+.choice-card:active { border-color: var(--accent, #e85d2a); }
+.stepper-input { width: 3.6rem; text-align: center; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 600; padding: 0; -moz-appearance: textfield; }
+.stepper-input::-webkit-outer-spin-button, .stepper-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.cooked-row { flex-wrap: wrap; }
