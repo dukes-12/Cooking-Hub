@@ -428,3 +428,4 @@ div.ticket > .ticket-line.is-unmatched { border-left-color: var(--warn); }
 .nutri-table td:last-child { text-align: right; font-weight: 600; }
 .barcode-start { display: flex; flex-direction: column; gap: 0.75rem; }
 .barcode-start .search-bar { margin: 0; }
+.nearby-list { display: flex; flex-direction: column; gap: 0.4rem; }

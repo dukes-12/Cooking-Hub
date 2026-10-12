@@ -3,9 +3,10 @@ import { chainsFor, getChain } from '../data/reference';
 import { fetchBarcodePrices, type BarcodePrice } from '../lib/openprices';
 import { fmtMoney } from '../lib/pricing';
 import { storeKey, storeTitle } from '../lib/stores';
+import { findNearbyStores, fmtDistance, getPosition, type NearbyStore } from '../lib/geo';
 import { uid } from '../lib/text';
 import { useApp } from '../state';
-import type { Ingredient, SizeUnit } from '../types';
+import type { ChosenStore, Ingredient, SizeUnit } from '../types';
 import { Section, Sheet } from './ui';
 
 /**
@@ -68,9 +69,33 @@ export const chainOnlyKey = (chainId: string) => `chain:${chainId}`;
  */
 export function PriceForm({ ing, onDone, beforeSave, cancelLabel = 'Annuler' }: { ing: Ingredient; onDone: (msg?: string) => void; beforeSave?: () => Ingredient; cancelLabel?: string }) {
   const { state, actions } = useApp();
-  const stores = state.profile.stores;
   const chains = chainsFor(state.profile.country);
-  const [key, setKey] = useState(stores[0] ? storeKey(stores[0]) : '');
+  // Magasin trouvé autour de moi : ajouté à mes magasins à l'enregistrement du prix.
+  const [picked, setPicked] = useState<ChosenStore | null>(null);
+  const stores = picked && !state.profile.stores.some((s) => storeKey(s) === storeKey(picked)) ? [picked, ...state.profile.stores] : state.profile.stores;
+  const [key, setKey] = useState(state.profile.stores[0] ? storeKey(state.profile.stores[0]) : '');
+  const [nearby, setNearby] = useState<NearbyStore[] | null>(null);
+  const [finding, setFinding] = useState(false);
+  const [findError, setFindError] = useState<string | null>(null);
+  const findAround = async () => {
+    setFinding(true);
+    setFindError(null);
+    try {
+      setNearby((await findNearbyStores(await getPosition(), state.profile.country)).slice(0, 8));
+    } catch (e) {
+      setFindError((e as Error).message);
+    } finally {
+      setFinding(false);
+    }
+  };
+  const pickNearby = (n: NearbyStore) => {
+    // Déjà dans mes magasins (même enseigne, à quelques dizaines de mètres) : on le reprend.
+    const saved = state.profile.stores.find((x) => x.chainId === n.chain.id && x.lat != null && x.lon != null && Math.abs(x.lat - n.lat) < 0.0015 && Math.abs(x.lon - n.lon) < 0.0015);
+    const store: ChosenStore = saved ?? { id: uid('st-'), chainId: n.chain.id, label: n.name, address: n.address, lat: n.lat, lon: n.lon, distanceM: Math.round(n.distanceM), source: 'google' };
+    if (!saved) setPicked(store);
+    setKey(storeKey(store));
+    setNearby(null);
+  };
   const [price, setPrice] = useState('');
   const [size, setSize] = useState(ing.packQty ? String(ing.packQty) : ing.unit === 'pc' ? '1' : '');
   const [unit, setUnit] = useState<SizeUnit>(ing.unit === 'ml' ? 'ml' : ing.unit === 'pc' ? 'pc' : 'g');
@@ -81,6 +106,7 @@ export function PriceForm({ ing, onDone, beforeSave, cancelLabel = 'Annuler' }: 
 
   const save = () => {
     if (!chainId || !(value > 0)) return;
+    if (picked && storeKey(picked) === key && !state.profile.stores.some((x) => storeKey(x) === key)) actions.addStore(picked);
     const product = beforeSave?.() ?? ing;
     const qty = Number(size.replace(',', '.'));
     actions.addReceipt(
@@ -116,6 +142,23 @@ export function PriceForm({ ing, onDone, beforeSave, cancelLabel = 'Annuler' }: 
           </optgroup>
         </select>
       </label>
+      {nearby ? (
+        <div className="nearby-list">
+          {nearby.length === 0 && <p className="small muted">Aucun supermarché trouvé à proximité.</p>}
+          {nearby.map((n) => (
+            <button key={`${n.chain.id}-${n.lat}-${n.lon}`} className="price-row" onClick={() => pickNearby(n)}>
+              <span className="store-dot" style={{ background: n.chain.color }} />
+              <span className="grow">{n.name}<span className="small muted block">{n.address}</span></span>
+              <span className="small muted nowrap">{fmtDistance(n.distanceM)}</span>
+            </button>
+          ))}
+          <span className="small muted">Résultats Google</span>
+        </div>
+      ) : (
+        <button className="btn btn-soft btn-sm" disabled={finding} onClick={findAround}>{finding ? 'Recherche…' : '📍 Magasins autour de moi'}</button>
+      )}
+      {findError && <p className="small warn-text">{findError}</p>}
+      {chainId && <p className="small muted">{store ? `Le prix compte pour ${storeTitle(store)} et pour toute l'enseigne ${getChain(chainId)?.name}.` : `Le prix compte pour toute l'enseigne ${getChain(chainId)?.name}.`}</p>}
       <div className="row gap">
         <label className="field grow">
           <span>Prix</span>
