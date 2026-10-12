@@ -23,7 +23,7 @@ export const estimatedProvider: PriceProvider = {
   label: 'Estimation (prix moyens × indice enseigne)',
   pricePerKg(ingredientId, chainId, country) {
     const ing = getIngredient(ingredientId);
-    if (!ing || ing.partial || !ing.pricePerKg) return null;
+    if (!ing || ing.partial || (!ing.pricePerKg && ing.custom)) return null;
     const base = ing.pricePerKg * getCountry(country).priceFactor;
     if (!chainId) return base;
     const chain = getChain(chainId);

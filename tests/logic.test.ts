@@ -730,3 +730,17 @@ describe('frigo : placard, péremption et cuisine', () => {
     expect(stepDurations('Couper en 4 morceaux.')).toEqual([]);
   });
 });
+
+describe('ingrédients ajoutés', () => {
+  it('reconnaît le safran, les épices et les mots portugais courants', () => {
+    const id = (l: string) => parseIngredientLine(l).ingredientId;
+    expect(id('1 dose de safran')).toBe('safran');
+    expect(id('1 colher (chá) açafrão em pó')).toBe('safran');
+    expect(id('1 bouquet garni')).toBe('bouquet-garni');
+    expect(id('3 gemas')).toBe('oeuf');
+    expect(id('150 g fiambre em fatias')).toBe('jambon');
+    expect(id('1 raminho de hortelã')).toBe('menthe');
+    expect(id('2 feuilles de gélatine')).toBe('gelatine');
+    expect(id('1 pincée de noix de muscade')).toBe('muscade');
+  });
+});

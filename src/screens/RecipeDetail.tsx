@@ -1,4 +1,5 @@
 import { CookedSheet } from '../components/CookedSheet';
+import { PriceBreakdown } from '../components/PriceBreakdown';
 import { useChainPrices } from '../lib/chainprices';
 import { useEffect, useMemo, useState } from 'react';
 import { importFromUrl } from '../lib/importer';
@@ -39,6 +40,7 @@ export function RecipeView({ recipe, preview, onSave }: { recipe: Recipe; previe
   const [doneSteps, setDoneSteps] = useState<number[]>([]);
   const [cooked, setCooked] = useState(false);
   const [cookedSheet, setCookedSheet] = useState(false);
+  const [showPrice, setShowPrice] = useState(false);
 
   const community = useCommunityPrices() + useChainPrices();
   useEffect(() => {
@@ -105,6 +107,8 @@ export function RecipeView({ recipe, preview, onSave }: { recipe: Recipe; previe
         ) : (
           <p className="small good-text">🎉 Tu as tout ce qu’il faut !</p>
         )}
+        <button className="link small" onClick={() => setShowPrice(!showPrice)}>{showPrice ? '▴ Masquer le détail du prix' : '▾ Détail : prix ingrédient par ingrédient'}</button>
+        {showPrice && <PriceBreakdown a={a} country={country} />}
         <ul className="ingredients">
           {a.lines.map((l) => (
             <li key={l.index} className={`ing ing-${l.removed ? 'removed' : l.fridge} ${l.blocked ? 'ing-blocked' : ''}`}>
