@@ -55,7 +55,8 @@ function MyStores({ onMap }: { onMap: () => void }) {
   const { state, observations, actions } = useApp();
   const { stores, country } = state.profile;
   // Tickets dont le magasin a été supprimé (ou jamais choisi) : à rattacher pour garder leurs prix.
-  const orphans = state.receipts.filter((r) => !stores.some((s) => storeKey(s) === r.storeKey));
+  // Prix notés pour une enseigne sans magasin précis : pas des tickets à rattacher.
+  const orphans = state.receipts.filter((r) => !r.storeKey.startsWith('chain:') && !stores.some((s) => storeKey(s) === r.storeKey));
   const orphanBlock = orphans.length > 0 && (
     <div className="card orphan-tickets">
       <b>🧾 {orphans.length} ticket{orphans.length > 1 ? 's' : ''} sans magasin</b>

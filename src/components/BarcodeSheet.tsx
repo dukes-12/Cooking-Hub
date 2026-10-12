@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { getIngredient } from '../data/ingredients';
-import { customByBarcode } from '../lib/custom';
+import { customByBarcode, makeCustomProduct } from '../lib/custom';
+import { useApp } from '../state';
+import { PriceForm } from './ExactPrices';
 import { useMyPhoto } from '../lib/photoStore';
 import { fetchProductByCode, offProductUrl, type OffProduct } from '../lib/off';
 import { ingredientForCategories } from '../lib/openprices';
@@ -25,6 +27,17 @@ export function packQuantity(p: OffProduct, ing: Ingredient): number {
 /** Quantité d'un paquet de mon produit (contenu noté sur sa fiche, sinon 250 g ou 1 pièce). */
 const myPackQuantity = (ing: Ingredient) => ing.packQty ?? (ing.unit === 'pc' ? 1 : Math.round(gramsToBase(ing, 250)));
 
+/** Fiche de mon produit tirée d'Open Food Facts (nom, marque, paquet, nutrition), rattachée à l'aliment reconnu. */
+function offDraft(p: OffProduct, familyId?: string): Ingredient {
+  const u = p.qtyUnit?.toLowerCase();
+  const unit = u === 'ml' || u === 'l' || u === 'cl' ? 'ml' : 'g';
+  const name = [p.name || 'Produit', p.brands.split(',')[0]].filter(Boolean).join(' ');
+  const nutrition = p.kcal != null ? { kcal: p.kcal, protein: p.protein ?? 0, carbs: p.carbs ?? 0, fat: p.fat ?? 0 } : undefined;
+  const details = Object.fromEntries((['satFat', 'sugars', 'fiber', 'salt'] as const).filter((k) => p[k] != null).map((k) => [k, p[k] as number]));
+  const draft = makeCustomProduct({ name, aisle: 'epicerie', unit, familyId, barcode: p.code, image: p.image ?? undefined, packQty: p.qty && (u === 'g' || u === 'ml') ? p.qty : undefined, nutrition, details, nutriscore: p.nutriscore ?? undefined, nova: p.nova ?? undefined });
+  return { ...draft, id: `mine:off-${p.code}` };
+}
+
 /** Recherche d'un produit emballé par son code-barres (Open Food Facts) : scan caméra si le navigateur le permet, sinon saisie. */
 export function BarcodeSheet({ open, onClose, onAdd, onOpenProduct }: { open: boolean; onClose: () => void; onAdd: (ingredientId: string, qty: number) => void; onOpenProduct: (ingredientId: string) => void }) {
   const [code, setCode] = useState('');
@@ -37,6 +50,10 @@ export function BarcodeSheet({ open, onClose, onAdd, onOpenProduct }: { open: bo
   const [mine, setMine] = useState<Ingredient | null>(null);
   const [unknown, setUnknown] = useState<string | null>(null);
   const [form, setForm] = useState<ProductSeed | null>(null);
+  // Relevé du prix en rayon, juste après le scan.
+  const [pricing, setPricing] = useState(false);
+  const [saved, setSaved] = useState<string | null>(null);
+  const { actions } = useApp();
   const minePhoto = useMyPhoto('products', mine?.id);
   const video = useRef<HTMLVideoElement>(null);
 
@@ -48,6 +65,8 @@ export function BarcodeSheet({ open, onClose, onAdd, onOpenProduct }: { open: bo
     setMine(null);
     setUnknown(null);
     setForm(null);
+    setPricing(false);
+    setSaved(null);
   };
 
   const lookup = async (c: string) => {
@@ -129,7 +148,7 @@ export function BarcodeSheet({ open, onClose, onAdd, onOpenProduct }: { open: bo
           }}
         />
       ) : mine ? (
-        <>
+        <div className="barcode-start">
           <div className="off-item">
             {minePhoto || mine.image ? <img src={minePhoto ?? mine.image} alt="" referrerPolicy="no-referrer" /> : <span className="off-noimg">📦</span>}
             <span className="grow">
@@ -137,14 +156,22 @@ export function BarcodeSheet({ open, onClose, onAdd, onOpenProduct }: { open: bo
               <span className="small muted block">{mine.partial ? 'sans valeurs nutritionnelles' : `${mine.kcal} kcal · ${mine.protein} g prot. pour 100 ${mine.unit === 'ml' ? 'ml' : 'g'}`}</span>
             </span>
           </div>
-          <div className="row gap">
-            <button className="btn btn-primary grow" onClick={() => { onAdd(mine.id, myPackQuantity(mine)); close(); }}>🧊 Ajouter au frigo</button>
-            <button className="btn btn-soft grow" onClick={() => { onOpenProduct(mine.id); close(); }}>Fiche produit</button>
-          </div>
-          <button className="link small" onClick={reset}>Autre code</button>
-        </>
+          {saved && <p className="small good-text">✓ {saved}</p>}
+          {pricing ? (
+            <PriceForm ing={mine} cancelLabel="Plus tard" onDone={(msg) => { setPricing(false); if (msg) setSaved(msg); }} />
+          ) : (
+            <>
+              <button className="btn btn-primary btn-block" onClick={() => setPricing(true)}>💶 Relever le prix en rayon</button>
+              <div className="row gap">
+                <button className="btn btn-soft grow" onClick={() => { onAdd(mine.id, myPackQuantity(mine)); close(); }}>🧊 Ajouter au frigo</button>
+                <button className="btn btn-soft grow" onClick={() => { onOpenProduct(mine.id); close(); }}>Fiche produit</button>
+              </div>
+              <button className="link small" onClick={reset}>Autre code</button>
+            </>
+          )}
+        </div>
       ) : !product ? (
-        <>
+        <div className="barcode-start">
           {scanning && <video ref={video} className="scan-video" playsInline muted />}
           {canScan && !scanning && <button className="btn btn-primary btn-block" onClick={() => setScanning(true)}>📷 Scanner le code-barres</button>}
           {scanning && <button className="btn btn-ghost btn-block" onClick={() => setScanning(false)}>Arrêter la caméra</button>}
@@ -184,9 +211,9 @@ export function BarcodeSheet({ open, onClose, onAdd, onOpenProduct }: { open: bo
           {unknown && (
             <button className="btn btn-soft btn-block" onClick={() => setForm({ barcode: unknown })}>✚ Créer ma fiche pour ce code (photo, valeurs nutritionnelles)</button>
           )}
-        </>
+        </div>
       ) : (
-        <>
+        <div className="barcode-start">
           <div className="off-item">
             {product.image ? <img src={product.image} alt="" referrerPolicy="no-referrer" /> : <span className="off-noimg">📦</span>}
             <span className="grow">
@@ -201,13 +228,30 @@ export function BarcodeSheet({ open, onClose, onAdd, onOpenProduct }: { open: bo
             <button className="btn btn-primary grow" disabled={!ing} onClick={() => { onAdd(ing!.id, packQuantity(product, ing!)); close(); }}>🧊 Ajouter au frigo</button>
             <button className="btn btn-soft grow" disabled={!ing} onClick={() => { onOpenProduct(ing!.id); close(); }}>Fiche produit</button>
           </div>
+          {pricing ? (
+            <PriceForm
+              ing={offDraft(product, ingId)}
+              cancelLabel="Plus tard"
+              beforeSave={() => {
+                // Le prix est rattaché au produit exact : sa fiche est créée depuis Open Food Facts.
+                const ing = offDraft(product, ingId);
+                actions.addCustomProduct(ing);
+                setMine(ing);
+                setProduct(null);
+                return ing;
+              }}
+              onDone={(msg) => { setPricing(false); if (msg) setSaved(msg); }}
+            />
+          ) : (
+            <button className="btn btn-primary btn-block" onClick={() => setPricing(true)}>💶 Relever le prix en rayon</button>
+          )}
           <button className="btn btn-ghost btn-block" onClick={() => setForm({ barcode: product.code, off: product, familyId: ingId })}>✚ Créer ma fiche de ce produit (ma photo, ses valeurs nutritionnelles)</button>
           <div className="row between small">
             <button className="link" onClick={reset}>Autre code</button>
             <a className="link" href={offProductUrl(product.code)} target="_blank" rel="noreferrer">Voir sur Open Food Facts</a>
           </div>
           <p className="small muted">Données Open Food Facts (licence ODbL, photo CC BY-SA).</p>
-        </>
+        </div>
       )}
     </Sheet>
   );

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getChain } from '../data/reference';
+import { chainsFor, getChain } from '../data/reference';
 import { fetchBarcodePrices, type BarcodePrice } from '../lib/openprices';
 import { fmtMoney } from '../lib/pricing';
 import { storeKey, storeTitle } from '../lib/stores';
@@ -58,51 +58,68 @@ export function ExactPrices({ ing, onSaved }: { ing: Ingredient; onSaved: (msg: 
   );
 }
 
-function PriceForm({ ing, onDone }: { ing: Ingredient; onDone: (msg?: string) => void }) {
+/** Clé d'un prix relevé sans magasin précis : seulement l'enseigne. */
+export const chainOnlyKey = (chainId: string) => `chain:${chainId}`;
+
+/**
+ * Relevé d'un prix en rayon : dans un de mes magasins, ou seulement pour une enseigne.
+ * Enregistré comme un petit ticket : il compte dans les prix de l'appli et le comparatif.
+ * beforeSave : donne le produit à enregistrer (ex. fiche créée à la volée depuis Open Food Facts).
+ */
+export function PriceForm({ ing, onDone, beforeSave, cancelLabel = 'Annuler' }: { ing: Ingredient; onDone: (msg?: string) => void; beforeSave?: () => Ingredient; cancelLabel?: string }) {
   const { state, actions } = useApp();
   const stores = state.profile.stores;
+  const chains = chainsFor(state.profile.country);
   const [key, setKey] = useState(stores[0] ? storeKey(stores[0]) : '');
   const [price, setPrice] = useState('');
   const [size, setSize] = useState(ing.packQty ? String(ing.packQty) : ing.unit === 'pc' ? '1' : '');
   const [unit, setUnit] = useState<SizeUnit>(ing.unit === 'ml' ? 'ml' : ing.unit === 'pc' ? 'pc' : 'g');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const store = stores.find((s) => storeKey(s) === key);
+  const chainId = store?.chainId ?? (key.startsWith('chain:') ? key.slice(6) : '');
   const value = Number(price.replace(',', '.'));
 
-  if (!stores.length) return <p className="small">Ajoute d'abord tes magasins dans l'onglet Magasins.</p>;
-
   const save = () => {
-    if (!store || !(value > 0)) return;
+    if (!chainId || !(value > 0)) return;
+    const product = beforeSave?.() ?? ing;
     const qty = Number(size.replace(',', '.'));
     actions.addReceipt(
       {
         id: uid('rc-'),
         storeKey: key,
-        chainId: store.chainId,
-        country: getChain(store.chainId)?.country ?? state.profile.country,
+        chainId,
+        country: getChain(chainId)?.country ?? state.profile.country,
         date,
         total: value,
         createdAt: Date.now(),
-        lines: [{ id: uid('l-'), label: ing.name, productId: ing.id, count: 1, size: qty > 0 ? qty : null, sizeUnit: qty > 0 ? unit : 'none', weightKg: null, totalPrice: value, toFridge: false }],
+        lines: [{ id: uid('l-'), label: product.name, productId: product.id, count: 1, size: qty > 0 ? qty : null, sizeUnit: qty > 0 ? unit : 'none', weightKg: null, totalPrice: value, toFridge: false }],
       },
       undefined,
       [],
     );
-    onDone(`Prix enregistré chez ${storeTitle(store)}`);
+    onDone(`Prix enregistré chez ${store ? storeTitle(store) : getChain(chainId)?.name}`);
   };
 
   return (
     <div className="new-product">
       <label className="field">
-        <span>Magasin</span>
+        <span>Où ?</span>
         <select className="input" value={key} onChange={(e) => setKey(e.target.value)}>
-          {stores.map((s) => <option key={storeKey(s)} value={storeKey(s)}>{storeTitle(s)}</option>)}
+          {!key && <option value="">Choisir…</option>}
+          {stores.length > 0 && (
+            <optgroup label="Mes magasins">
+              {stores.map((s) => <option key={storeKey(s)} value={storeKey(s)}>{storeTitle(s)}</option>)}
+            </optgroup>
+          )}
+          <optgroup label="Enseigne seulement (sans magasin précis)">
+            {chains.map((c) => <option key={c.id} value={chainOnlyKey(c.id)}>{c.name}</option>)}
+          </optgroup>
         </select>
       </label>
       <div className="row gap">
         <label className="field grow">
-          <span>Prix ({state.profile.country === 'PT' || state.profile.country === 'FR' ? '€' : 'prix'})</span>
-          <input className="input" type="number" inputMode="decimal" step="0.01" min={0} value={price} placeholder="ex. 1,89" onChange={(e) => setPrice(e.target.value)} autoFocus />
+          <span>Prix</span>
+          <input className="input" type="number" inputMode="decimal" step="0.01" min={0} value={price} placeholder="ex. 1,89" onChange={(e) => setPrice(e.target.value)} />
         </label>
         <label className="field grow">
           <span>Pour</span>
@@ -123,8 +140,8 @@ function PriceForm({ ing, onDone }: { ing: Ingredient; onDone: (msg?: string) =>
         <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
       </label>
       <div className="row gap">
-        <button className="btn btn-ghost grow" onClick={() => onDone()}>Annuler</button>
-        <button className="btn btn-primary grow" disabled={!store || !(value > 0)} onClick={save}>Enregistrer le prix</button>
+        <button className="btn btn-ghost grow" onClick={() => onDone()}>{cancelLabel}</button>
+        <button className="btn btn-primary grow" disabled={!chainId || !(value > 0)} onClick={save}>Enregistrer le prix</button>
       </div>
     </div>
   );
