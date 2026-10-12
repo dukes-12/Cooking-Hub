@@ -195,17 +195,21 @@ function guessCategory(r: Record<string, unknown>): Category {
   return 'plat';
 }
 
-function guessEquipment(all: string): Equipment[] {
+/** Appareils nécessaires d'après le texte (même règle que detectEquipment dans worker/recipes.js). */
+export function guessEquipment(all: string): Equipment[] {
   const t = normalize(all);
   const eq = new Set<Equipment>();
-  if (/four|enfourn|preheat|oven/.test(t)) eq.add('oven');
-  if (/poele|casserole|cocotte|feu |faire revenir|bouillir|wok|frying pan|saucepan|skillet/.test(t)) eq.add('stovetop');
-  if (/mixe|blender|mixeur/.test(t)) eq.add('blender');
-  if (/micro.?ondes|microwave/.test(t)) eq.add('microwave');
-  if (/batteur|fouet electrique|stand mixer/.test(t)) eq.add('mixer');
-  if (/air ?fryer/.test(t)) eq.add('airfryer');
+  if (/\bfours?\b|enfourn|\bforno\b|pre-?aquec|preheat|\boven\b/.test(t)) eq.add('oven');
+  if (/air ?fryer|airfryer|friteuse a air/.test(t)) eq.add('airfryer');
+  if (/micro.?ondas?|microwave/.test(t)) eq.add('microwave');
+  if (/\bmixe|blender|mixeur|liquidific|varinha/.test(t)) eq.add('blender');
+  if (/batteur|fouet electrique|batedeira|stand mixer/.test(t)) eq.add('mixer');
+  if (/poele|casserole|cocotte|\bfeu\b|frigideira|tacho|panela|\bwok\b|lume|faire revenir|bouillir|frying pan|saucepan|skillet/.test(t)) eq.add('stovetop');
   return [...eq];
 }
+
+/** Plats qui se cuisent au four, pour les recettes dont on n'a pas le texte des étapes. */
+const OVEN_DISHES = /gateau|g[aâ]teau|coulant|fondant|brownie|cookie|muffin|cake\b|tarte|quiche|gratin|clafoutis|cheesecake|madeleine|financier|souffle|lasagn|pizza|roti\b|au four|bolo\b|assad|empad|pao de|folar|pastel de nata|gratinad/;
 
 export function fromSchemaRecipe(r: Record<string, unknown>, url?: string, siteName?: string): Recipe {
   const title = decode(text(r.name)) || 'Recette importée';
@@ -315,7 +319,11 @@ export function fromHarvestedRecipe(r: Record<string, unknown> & { url: string; 
     const rec = fromSchemaRecipe({ ...r, recipeCuisine: r.recipeCuisine || siteCuisine }, r.url, r.source);
     const known = rec.ingredients.filter((i) => i.ingredientId).length;
     if (!rec.ingredients.length || known / rec.ingredients.length < 0.6) return null;
-    return { ...rec, id: stableId(r.url), imported: false, steps: [], stepCount: r.stepCount ?? undefined };
+    // Appareils relevés par le serveur dans les étapes ; à défaut, d'après le titre et le type de plat.
+    const equipment: Equipment[] = Array.isArray(r.equipment)
+      ? (r.equipment as Equipment[])
+      : [...new Set<Equipment>([...guessEquipment(`${rec.title} ${text(r.keywords)}`), ...(OVEN_DISHES.test(normalize(`${rec.title} ${text(r.keywords)}`)) ? (['oven'] as Equipment[]) : [])])];
+    return { ...rec, id: stableId(r.url), imported: false, steps: [], stepCount: r.stepCount ?? undefined, equipment };
   } catch {
     return null;
   }

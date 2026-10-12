@@ -141,21 +141,14 @@ export const EQUIPMENT: Record<Equipment, { label: string; emoji: string }> = {
 };
 
 /** Remplacements possibles d'un équipement manquant, avec conseil d'adaptation. */
+/**
+ * Remplacements d'ustensiles proposés quand il en manque un. Aucun pour les appareils de cuisson
+ * (four, air fryer, micro-ondes, autocuiseur) : on n'invente pas une autre cuisson que celle de la recette,
+ * la recette est simplement écartée.
+ */
 export const EQUIPMENT_ALTERNATIVES: Partial<Record<Equipment, { with: Equipment; tip: string }[]>> = {
-  oven: [
-    { with: 'airfryer', tip: 'Air fryer : baisse la température de 20 °C et réduis le temps d’environ 20 %. Cuis en plusieurs fournées si besoin.' },
-    { with: 'stovetop', tip: 'Poêle ou cocotte couverte à feu moyen-doux : retourne à mi-cuisson. Pour un gratin, finis à couvert pour que ça cuise à cœur.' },
-    { with: 'microwave', tip: 'Micro-ondes : cuisson plus rapide (÷3 environ) mais sans dorure. Couvre et vérifie toutes les 2 min.' },
-  ],
-  blender: [
-    { with: 'foodProcessor', tip: 'Robot : mixe en plusieurs fois pour une texture lisse.' },
-    { with: 'stovetop', tip: 'Sans mixeur : écrase au presse-purée ou à la fourchette, la texture sera plus rustique.' },
-  ],
-  mixer: [{ with: 'stovetop', tip: 'Au fouet à la main : compte 3 à 5 min d’huile de coude 💪.' }],
+  blender: [{ with: 'foodProcessor', tip: 'Robot : mixe en plusieurs fois pour une texture lisse.' }],
   foodProcessor: [{ with: 'blender', tip: 'Blender : procède par petites quantités.' }],
-  pressureCooker: [{ with: 'stovetop', tip: 'En cocotte classique : multiplie le temps de cuisson par 2 à 3.' }],
-  airfryer: [{ with: 'oven', tip: 'Four : ajoute 20 °C et environ 20 % de temps.' }],
-  microwave: [{ with: 'stovetop', tip: 'Au bain-marie ou à la casserole à feu doux.' }],
 };
 
 /** Cuisines proposées, indépendantes du pays où l'on vit. */

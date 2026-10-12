@@ -31,6 +31,25 @@ const CHUNK = 200; // recettes par clé KV (on ne relit que le dernier morceau)
 const text = (v) => (typeof v === 'string' ? v : Array.isArray(v) ? text(v[0]) : v && typeof v === 'object' ? text(v.url ?? v['@id'] ?? v.text ?? v.name) : v == null ? '' : String(v));
 
 /** Fiche compacte, sans le texte des étapes. */
+/** Tout le texte d'une valeur schema.org (étapes, sections…), à plat. */
+const allText = (v) => (typeof v === 'string' ? v : Array.isArray(v) ? v.map(allText).join(' ') : v && typeof v === 'object' ? [v.name, v.text, allText(v.itemListElement ?? '')].filter(Boolean).join(' ') : '');
+
+/**
+ * Appareils nécessaires, lus dans le titre et les étapes (gardés car le texte des étapes ne l'est pas).
+ * Même règle que guessEquipment côté appli (src/lib/importer.ts).
+ */
+export function detectEquipment(textAll) {
+  const t = textAll.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const eq = [];
+  if (/\bfours?\b|enfourn|\bforno\b|pre-?aquec|preheat|\boven\b/.test(t)) eq.push('oven');
+  if (/air ?fryer|airfryer|friteuse a air/.test(t)) eq.push('airfryer');
+  if (/micro.?ondas?|microwave/.test(t)) eq.push('microwave');
+  if (/\bmixe|blender|mixeur|liquidific|varinha/.test(t)) eq.push('blender');
+  if (/batteur|fouet electrique|batedeira|stand mixer/.test(t)) eq.push('mixer');
+  if (/poele|casserole|cocotte|\bfeu\b|frigideira|tacho|panela|\bwok\b|lume|saucepan|skillet/.test(t)) eq.push('stovetop');
+  return eq;
+}
+
 export function compactRecipe(r, url, source) {
   const ingredients = (Array.isArray(r.recipeIngredient) ? r.recipeIngredient : []).map((x) => String(x).trim()).filter(Boolean);
   if (ingredients.length < 3 || !r.name) return null;
@@ -48,6 +67,7 @@ export function compactRecipe(r, url, source) {
     image: text(r.image) || null,
     nutrition: r.nutrition?.calories ? { calories: text(r.nutrition.calories) } : null,
     stepCount: steps,
+    equipment: detectEquipment([r.name, r.description, r.keywords, allText(r.recipeInstructions)].map((x) => (typeof x === 'string' ? x : '')).join(' ')),
     url,
     source,
   };
@@ -81,12 +101,36 @@ export async function runRecipes(env, now = new Date()) {
   state.current = now.getTime();
   await kv.put('recipes:state', JSON.stringify(state));
   // Index léger : adresses déjà récoltées et nombre de morceaux "recipes:chunk:N".
-  const index = (await kv.get('recipes:index', 'json')) ?? { chunks: 0, count: 0, urls: [] };
+  const index = (await kv.get('recipes:index', 'json')) ?? { chunks: 0, count: 0, urls: [], equipDone: true };
   const known = new Set([...index.urls, ...(state.failed ?? [])]);
   let msg = 'recettes : rien à faire cette semaine';
 
   try {
-    if (state.phase === 'collect') {
+    if (index.count && !index.equipDone) {
+      // Recettes récoltées avant la détection des appareils : on relit leur page (5 par passage).
+      let todo = PAGES_PER_RUN;
+      for (let n = 0; n < index.chunks && todo > 0; n++) {
+        const chunk = (await kv.get(`recipes:chunk:${n}`, 'json')) ?? [];
+        let changed = false;
+        for (const c of chunk) {
+          if (c.equipment || todo <= 0) continue;
+          todo--;
+          try {
+            const r = extractRecipe(await fetchText(c.url));
+            c.equipment = r ? detectEquipment([r.name, r.description, r.keywords, allText(r.recipeInstructions)].map((x) => (typeof x === 'string' ? x : '')).join(' ')) : detectEquipment(c.name);
+          } catch {
+            c.equipment = detectEquipment(c.name);
+          }
+          changed = true;
+        }
+        if (changed) await kv.put(`recipes:chunk:${n}`, JSON.stringify(chunk));
+      }
+      if (todo > 0) {
+        index.equipDone = true;
+        await kv.put('recipes:index', JSON.stringify(index));
+      }
+      msg = `recettes : appareils relus (${PAGES_PER_RUN - todo})`;
+    } else if (state.phase === 'collect') {
       // Les sources tournent : chacune lit la tranche suivante de ses sitemaps, jusqu'à son quota de la semaine
       // ou jusqu'à avoir parcouru tous ses sitemaps.
       const open = SOURCES.filter((s) => state.quota[s.id] > 0 && !state.exhausted?.[s.id]);

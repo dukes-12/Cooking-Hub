@@ -72,12 +72,25 @@ describe('adaptation', () => {
     expect(a.status).toBe('incompatible');
   });
 
-  it('propose une alternative au four', () => {
-    const a = adaptRecipe(recipe('saumon-four-legumes'), profile({ equipment: ['stovetop', 'airfryer'] }), []);
-    expect(a.equipment[0]).toMatchObject({ missing: 'oven', alternative: 'airfryer' });
-    expect(a.status).toBe('adapted');
-    const none = adaptRecipe(recipe('saumon-four-legumes'), profile({ equipment: [] }), []);
-    expect(none.status).toBe('incompatible');
+  it('écarte une recette au four sans four, sans inventer d’autre cuisson', () => {
+    const a = adaptRecipe(recipe('saumon-four-legumes'), profile({ equipment: ['stovetop', 'airfryer', 'microwave'] }), []);
+    expect(a.equipment[0]).toMatchObject({ missing: 'oven', alternative: undefined });
+    expect(a.status).toBe('incompatible');
+    expect(a.issues).toContain('Nécessite : Four');
+  });
+
+  it('repère le four dans les recettes récoltées', async () => {
+    const { detectEquipment } = await import('../worker/recipes.js');
+    const { fromHarvestedRecipe, guessEquipment } = await import('../src/lib/importer');
+    expect(detectEquipment('Préchauffez le four à 180°C. Enfournez 10 min.')).toContain('oven');
+    expect(detectEquipment('Pré-aqueça o forno a 200 ºC')).toContain('oven');
+    expect(detectEquipment('Mélangez avec une fourchette, faites revenir à la poêle')).toEqual(['stovetop']);
+    expect(guessEquipment('Écrasez à la fourchette')).toEqual([]);
+    const base = { recipeIngredient: ['200 g de chocolat noir', '3 oeufs', '100 g de beurre', '50 g de sucre'], url: 'https://www.marmiton.org/recettes/recette_x.aspx', source: 'Marmiton' };
+    // Information du serveur, sinon le type de plat.
+    expect(fromHarvestedRecipe({ ...base, name: 'Mousse au chocolat', equipment: ['oven'] })?.equipment).toEqual(['oven']);
+    expect(fromHarvestedRecipe({ ...base, name: 'Coulants au chocolat, coeur pistache' })?.equipment).toContain('oven');
+    expect(fromHarvestedRecipe({ ...base, name: 'Mousse au chocolat' })?.equipment).toEqual([]);
   });
 
   it('tient compte du frigo et adapte les portions', () => {
