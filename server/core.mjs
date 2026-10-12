@@ -417,6 +417,7 @@ function compactProduct(p) {
     image: p.image_front_small_url || p.image_front_url || null,
     nutriscore: /^[a-e]$/.test(p.nutriscore_grade ?? '') ? p.nutriscore_grade : null,
     categories: p.categories_tags ?? [],
+    countries: (p.countries_tags ?? []).slice(0, 12),
     kcal: num(n['energy-kcal_100g']),
     protein: num(n.proteins_100g),
     carbs: num(n.carbohydrates_100g),
@@ -428,7 +429,7 @@ function compactProduct(p) {
     nova: num(p.nova_group),
   };
 }
-const OFF_FIELDS = 'code,product_name,generic_name,brands,quantity,product_quantity,product_quantity_unit,image_front_small_url,image_front_url,nutriscore_grade,nova_group,categories_tags,nutriments';
+const OFF_FIELDS = 'code,product_name,generic_name,brands,quantity,product_quantity,product_quantity_unit,image_front_small_url,image_front_url,nutriscore_grade,nova_group,categories_tags,countries_tags,nutriments';
 
 /** Fiche Open Food Facts d'un produit emballé, par son code-barres. */
 export async function offProduct(code, ua, fetchImpl = fetch) {
@@ -453,8 +454,12 @@ export async function offCategory({ cat, country }, ua, fetchImpl = fetch) {
     return (data.products ?? []).map(compactProduct).filter((p) => p.name);
   };
   try {
+    // Produits vendus dans le pays d'abord, complétés par les plus scannés ailleurs.
     let products = OFF_COUNTRY[country] ? await search(OFF_COUNTRY[country]) : [];
-    if (products.length < 3) products = await search(null);
+    if (products.length < 8) {
+      const seen = new Set(products.map((p) => p.code));
+      products = [...products, ...(await search(null)).filter((p) => !seen.has(p.code))];
+    }
     return { status: 200, body: { products, source: 'Open Food Facts, ODbL' } };
   } catch (e) {
     return { status: 502, body: { error: `Open Food Facts : ${e.message}` } };

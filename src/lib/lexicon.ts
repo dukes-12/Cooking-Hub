@@ -84,6 +84,11 @@ export function entryForCategory(tag: string): LexEntry | undefined {
   return byCat.get(tag);
 }
 
+/** Toutes les entrées du dictionnaire (pour regrouper les variantes d'un aliment). */
+export function allLexEntries(): readonly LexEntry[] {
+  return entries;
+}
+
 export function lexiconSize(): number {
   return entries.length;
 }

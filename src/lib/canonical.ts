@@ -1,4 +1,5 @@
 import { getIngredient, INGREDIENTS } from '../data/ingredients';
+import { allLexEntries, ingredientFromEntry, lexName } from './lexicon';
 import { normalize } from './text';
 
 /**
@@ -17,16 +18,31 @@ function aliases() {
   return index;
 }
 
-export function baseIdForName(name: string): string | undefined {
-  const n = normalize(name);
+/** Morceaux et formes qui ne changent pas l'aliment : « filet de poulet », « pavé de saumon », « peito de frango ». */
+const CUTS = /^(filets?|blancs?|escalopes?|aiguillettes?|morceaux|morceau|des|tranches?|paves?|dos|emince(?:e|s|es)?|supremes?|cubes?|lamelles?|rondelles?|copeaux|feuilles?|brins?|gousses?|bottes?|zestes?|peitos?|filetes?|lombos?|postas?|bifes?|fatias?|cubos?|lombinhos?|breasts?|fillets?|slices?) (?:de |d |du |des |da |do |das |dos |of )?(?:la |l )?/;
+
+/** Préparations qui en font un autre produit (« saumon fumé », « tomates séchées », « poulet rôti »…). */
+const TRANSFORMED = /(?:^|\s)(fume|fumee|fumes|fumees|seche|sechee|seches|sechees|confit|confite|pane|panee|panes|marine|marinee|hache|hachee|roti|rotie|cuit|cuite|en conserve|en boite|au naturel|a l huile|fumado|fumada|seco|seca|assado|assada|panado|panada|smoked|dried|roasted)\b/;
+
+function matchStart(n: string): string | undefined {
   for (const { alias, id } of aliases()) {
     if (n === alias) return id;
     if (!n.startsWith(alias + ' ')) continue;
     const rest = n.slice(alias.length + 1);
     if (/^(de|d|du|des|a|au|aux|en|com|do|da|dos|das|ao|with|of)\b/.test(rest)) continue;
+    if (TRANSFORMED.test(rest)) continue;
     return id;
   }
   return undefined;
+}
+
+export function baseIdForName(name: string): string | undefined {
+  const n = normalize(name);
+  const direct = matchStart(n);
+  if (direct) return direct;
+  // « Filet de poulet », « Aiguillettes de poulet » → poulet.
+  const cut = n.replace(CUTS, '');
+  return cut !== n ? matchStart(cut) : undefined;
 }
 
 const cache = new Map<string, string>();
@@ -47,3 +63,21 @@ export function baseId(id: string): string {
 
 /** Même aliment ? (parmesan et parmesan râpé, sachet d'herbes de marque et herbes de Provence…) */
 export const sameFood = (a: string, b: string) => a === b || baseId(a) === baseId(b);
+
+/** Variantes d'un aliment dans le dictionnaire (« Poulet fermier », « Filet de poulet halal »…), par nom. */
+export function lexVariants(id: string, limit = 40): string[] {
+  const out = new Set<string>();
+  for (const e of allLexEntries()) {
+    if (out.size >= limit) break;
+    const ing = ingredientFromEntry(e);
+    if (ing.id !== id && baseId(ing.id) === id) out.add(lexName(e, 'fr'));
+  }
+  return [...out];
+}
+
+/** Produit du dictionnaire regroupé sous son aliment de base (« Poulet fermier » → Blanc de poulet). */
+export function grouped(id: string): string {
+  if (!id.startsWith('lex:')) return id;
+  const base = baseId(id);
+  return base !== id && INGREDIENTS.some((i) => i.id === base) ? base : id;
+}

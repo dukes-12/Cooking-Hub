@@ -1,4 +1,4 @@
-import { baseIdForName } from '../lib/canonical';
+import { baseIdForName, grouped } from '../lib/canonical';
 import { useMemo, useState, type ReactNode } from 'react';
 import { customIngredients, getIngredient, INGREDIENTS } from '../data/ingredients';
 import { ingredientFromEntry, searchLexicon, useLexiconReady } from '../lib/lexicon';
@@ -103,8 +103,13 @@ export function IngredientPicker({ onPick, exclude = [], placeholder = 'Recherch
     // Complète avec le dictionnaire multilingue (français, portugais, anglais) : "alcachofra" trouve l'artichaut.
     const seen = new Set(own.map((i) => i.id));
     const extra = (lexReady ? searchLexicon(q, 8) : [])
-      .map(ingredientFromEntry)
-      .filter((i) => !seen.has(i.id) && !exclude.includes(i.id));
+      // Variantes regroupées sous leur aliment de base (« Poulet fermier » → Blanc de poulet).
+      .map((e) => {
+        const ing = ingredientFromEntry(e);
+        const g = grouped(ing.id);
+        return g === ing.id ? ing : getIngredient(g)!;
+      })
+      .filter((i, k, list) => !seen.has(i.id) && !exclude.includes(i.id) && list.findIndex((x) => x.id === i.id) === k);
     // « parmesan râpé », « courgette bio » : l'aliment de base est proposé.
     const base = baseIdForName(q);
     const baseIng = base && !seen.has(base) && !exclude.includes(base) ? getIngredient(base) : undefined;

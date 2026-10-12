@@ -1,3 +1,4 @@
+import { grouped } from './canonical';
 import { detectEquipment } from './equipment';
 import { getIngredient, INGREDIENTS } from '../data/ingredients';
 import { cuisineFromText } from '../data/reference';
@@ -60,7 +61,7 @@ export function matchIngredient(name: string): string | undefined {
   // Dictionnaire multilingue (artichaut, alcachofra, artichoke…) : il l'emporte quand son nom est plus long
   // ("couve-flor" = chou-fleur, et non "couve" = chou kale).
   const lex = findInTextDetailed(name);
-  if (lex && (!own || lex.words > own.words)) return ingredientFromEntry(lex.entry).id;
+  if (lex && (!own || lex.words > own.words)) return grouped(ingredientFromEntry(lex.entry).id);
   return own?.id;
 }
 

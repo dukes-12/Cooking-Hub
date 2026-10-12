@@ -10,6 +10,8 @@ export interface OffProduct {
   image: string | null;
   nutriscore: 'a' | 'b' | 'c' | 'd' | 'e' | null;
   categories: string[];
+  /** Pays où il est vendu (étiquettes Open Food Facts, ex. en:portugal). */
+  countries?: string[];
   kcal: number | null;
   protein: number | null;
   carbs: number | null;

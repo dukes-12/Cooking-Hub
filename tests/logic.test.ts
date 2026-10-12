@@ -345,7 +345,7 @@ describe('Open Food Facts / Open Prices', () => {
     const calls: string[] = [];
     const cat = await offCategory({ cat: 'en:artichokes', country: 'PT' }, 'ua', async (url: string) => {
       calls.push(url);
-      const products = url.includes('countries_tags') ? [] : [{ code: '1', product_name: 'Artichauts' }, { code: '2', product_name: 'Coeurs' }];
+      const products = url.includes('countries_tags=en') ? [] : [{ code: '1', product_name: 'Artichauts' }, { code: '2', product_name: 'Coeurs' }];
       return new Response(JSON.stringify({ products }));
     });
     expect(calls).toHaveLength(2);
@@ -775,5 +775,19 @@ describe('variantes d’un aliment', () => {
     const a = adaptRecipe(r, { ...DEFAULT_PROFILE, equipment: ['stovetop', 'oven'] }, [{ ingredientId: mine.id, qty: 200, addedAt: 0 }]);
     expect(a.lines.find((l) => l.ingredient?.id === 'parmesan')?.fridge).toBe('full');
     setCustomIngredients([]);
+  });
+});
+
+describe('regroupement des produits', () => {
+  it('range les morceaux sous l’aliment, pas les produits transformés', async () => {
+    const { baseIdForName, grouped } = await import('../src/lib/canonical');
+    expect(baseIdForName('Aiguillettes de poulet')).toBe('poulet');
+    expect(baseIdForName('Peito de frango')).toBe('poulet');
+    expect(baseIdForName('Pavé de cabillaud')).toBe('cabillaud');
+    expect(baseIdForName('Saumon fumé')).toBeUndefined();
+    expect(baseIdForName('Saumon atlantique fumé')).toBeUndefined();
+    expect(baseIdForName('Poulet rôti')).toBeUndefined();
+    expect(grouped('poulet')).toBe('poulet');
+    expect(parseIngredientLine('2 filets de poulet fermier').ingredientId).toBe('poulet');
   });
 });

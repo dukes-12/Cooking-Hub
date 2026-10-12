@@ -3,6 +3,7 @@ import { ExactPrices } from '../components/ExactPrices';
 import { ProductForm } from '../components/NewProduct';
 import { Chip, Empty, Section, Sheet } from '../components/ui';
 import { useMyPhoto } from '../lib/photoStore';
+import { lexVariants } from '../lib/canonical';
 import { AISLE_LABELS, customIngredients, getIngredient } from '../data/ingredients';
 import { CHAINS, getChain, getCountry } from '../data/reference';
 import { productImage, type ProductImage } from '../lib/images';
@@ -18,9 +19,11 @@ import { storeTitle } from '../lib/stores';
 import { back, go } from '../router';
 import { useApp } from '../state';
 
+const OFF_COUNTRY_TAG: Record<string, string> = { FR: 'en:france', PT: 'en:portugal', ES: 'en:spain', BE: 'en:belgium', CH: 'en:switzerland', LU: 'en:luxembourg', CA: 'en:canada', DE: 'en:germany', IT: 'en:italy' };
+
 export function Product({ id }: { id: string }) {
   const { state, actions, recipes, observations } = useApp();
-  useLexiconReady();
+  const lexReady = useLexiconReady();
   const ing = getIngredient(id);
   const entry = entryForProduct(id);
   const [img, setImg] = useState<ProductImage | null>(null);
@@ -68,6 +71,12 @@ export function Product({ id }: { id: string }) {
   const variants = customIngredients().filter((c) => c.family === id);
   const community = useMemo(() => communityStats(id, country), [id, country, cv]); // eslint-disable-line react-hooks/exhaustive-deps
   const offNutrition = useMemo(() => medianNutrition(offProducts), [offProducts]);
+  // Produits du rayon : ceux vendus dans mon pays d'abord.
+  const countryTag = OFF_COUNTRY_TAG[country];
+  const isLocal = (p: OffProduct) => !!countryTag && !!p.countries?.includes(countryTag);
+  const shelf = useMemo(() => [...offProducts].sort((a, b) => Number(isLocal(b)) - Number(isLocal(a))), [offProducts, country]); // eslint-disable-line react-hooks/exhaustive-deps
+  const localCount = shelf.filter(isLocal).length;
+  const groupedNames = useMemo(() => (ing && !ing.custom && lexReady ? lexVariants(id, 24) : []), [id, ing, lexReady]);
   // Pas de photo Wikimedia : celle du produit le plus scanné du rayon (Open Food Facts).
   const offImage = offProducts.find((p) => p.image);
 
@@ -285,15 +294,22 @@ export function Product({ id }: { id: string }) {
         </p>
       </Section>
 
+      {groupedNames.length > 0 && (
+        <Section title="Regroupés sous ce produit">
+          <div className="chips">{groupedNames.map((n) => <span key={n} className="badge">{n}</span>)}</div>
+          <p className="small muted">Ces variantes comptent comme « {ing.name} » : au frigo, dans les recettes et sur la liste de courses.</p>
+        </Section>
+      )}
+
       {offProducts.length > 0 && (
-        <Section title="Dans les rayons">
+        <Section title={`Produits de ce type${localCount ? ` · ${getCountry(country).name} d’abord` : ''}`}>
           <div className="off-list">
-            {offProducts.slice(0, 6).map((p) => (
+            {shelf.slice(0, 8).map((p) => (
               <a key={p.code} className="off-item" href={offProductUrl(p.code)} target="_blank" rel="noreferrer">
                 {p.image ? <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <span className="off-noimg">{aisle.emoji}</span>}
                 <span className="grow">
                   <b>{p.name}</b>
-                  <span className="small muted block">{[p.brands.split(',')[0], p.quantity].filter(Boolean).join(' · ')}</span>
+                  <span className="small muted block">{[p.brands.split(',')[0], p.quantity].filter(Boolean).join(' · ')}{isLocal(p) ? ' · vendu dans ton pays' : ''}</span>
                 </span>
                 {p.nutriscore && <span className={`nutriscore ns-${p.nutriscore}`}>{p.nutriscore.toUpperCase()}</span>}
               </a>

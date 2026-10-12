@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Chip, Empty } from '../components/ui';
-import { AISLE_LABELS, customIngredients, INGREDIENTS } from '../data/ingredients';
+import { AISLE_LABELS, customIngredients, getIngredient, INGREDIENTS } from '../data/ingredients';
+import { grouped } from '../lib/canonical';
 import { useChainPrices } from '../lib/chainprices';
 import { ingredientFromEntry, searchLexicon, useLexiconReady } from '../lib/lexicon';
 import { loadCommunityPrices, useCommunityPrices } from '../lib/openprices';
@@ -49,7 +50,8 @@ export function Products() {
       // Recherche aussi dans le dictionnaire multilingue (artichaut, alcachofra…).
       const seen = new Set(list.map((i) => i.id));
       if (lexReady) for (const e of searchLexicon(q, 12)) {
-        const ing = ingredientFromEntry(e);
+        const lexIng = ingredientFromEntry(e);
+        const ing = grouped(lexIng.id) === lexIng.id ? lexIng : getIngredient(grouped(lexIng.id))!;
         if (!seen.has(ing.id)) list.push(ing), seen.add(ing.id);
       }
     }

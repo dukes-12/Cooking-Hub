@@ -51,7 +51,7 @@ export const INGREDIENTS: Ingredient[] = [
   ing('gingembre', 'Gingembre frais', 'fruits-legumes', 'g', [80, 1.8, 15, 0.8], 8, [], { aliases: ['gingembre'] }),
 
   // Boucherie
-  ing('poulet', 'Blanc de poulet', 'boucherie', 'g', [121, 23, 0, 2.6], 13, ['meat', 'poultry'], { aliases: ['filet de poulet', 'blancs de poulet', 'escalope de poulet', 'poulet'], subs: ['dinde', 'tofu'] }),
+  ing('poulet', 'Blanc de poulet', 'boucherie', 'g', [121, 23, 0, 2.6], 13, ['meat', 'poultry'], { aliases: ['filet de poulet', 'blancs de poulet', 'escalope de poulet', 'poulet', 'frango', 'peito de frango', 'peitos de frango', 'chicken breast'], subs: ['dinde', 'tofu'] }),
   ing('cuisse-poulet', 'Cuisses de poulet', 'boucherie', 'g', [190, 18, 0, 13], 7, ['meat', 'poultry'], { aliases: ['cuisse de poulet', 'hauts de cuisse'], subs: ['poulet'] }),
   ing('dinde', 'Escalope de dinde', 'boucherie', 'g', [110, 24, 0, 1.5], 12, ['meat', 'poultry'], { aliases: ['dinde'], subs: ['poulet'] }),
   ing('boeuf-hache', 'Bœuf haché 5%', 'boucherie', 'g', [125, 21, 0, 5], 13, ['meat', 'beef'], { aliases: ['viande hachee', 'steak hache', 'boeuf hache'], subs: ['lentilles', 'proteines-soja'] }),
