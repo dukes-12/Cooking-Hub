@@ -9,7 +9,7 @@ import { CHAINS, getChain, getCountry } from '../data/reference';
 import { productImage, type ProductImage } from '../lib/images';
 import { entryForProduct, lexName, useLexiconReady } from '../lib/lexicon';
 import { fetchCategoryProducts, medianNutrition, offProductUrl, type OffProduct } from '../lib/off';
-import { fetchChainHistory, useChainPrices, weekStart } from '../lib/chainprices';
+import { chainProducts, fetchChainHistory, useChainPrices, weekStart } from '../lib/chainprices';
 import { PriceHistoryChart, type HistorySeries } from '../components/PriceHistoryChart';
 import { categoryFor, communityStats, loadCommunityPrices, useCommunityPrices } from '../lib/openprices';
 import { fmtMoney } from '../lib/pricing';
@@ -35,6 +35,8 @@ export function Product({ id }: { id: string }) {
   const [offProducts, setOffProducts] = useState<OffProduct[]>([]);
   const [online, setOnline] = useState<Record<string, [string, number][]>>({});
   const cv = useCommunityPrices() + useChainPrices();
+  // Produits relevés sur les sites des enseignes (produit personnel : ceux de sa famille).
+  const siteProducts = useMemo(() => chainProducts(id, state.profile.country, getIngredient(id)?.family), [id, state.profile.country, cv]); // eslint-disable-line react-hooks/exhaustive-deps
   const country = state.profile.country;
   const cat = categoryFor(id);
 
@@ -204,6 +206,31 @@ export function Product({ id }: { id: string }) {
       ) : null}
 
       <ExactPrices ing={ing} onSaved={say} />
+
+      {siteProducts.length > 0 && (
+        <Section title="Sur les sites des enseignes">
+          {siteProducts.map(({ chainId, price }) => {
+            const chain = getChain(chainId);
+            return (
+              <div key={chainId} className="site-products">
+                <div className="row between">
+                  <b className="row gap-sm"><span className="store-dot" style={{ background: chain?.color }} />{chain?.name ?? chainId}</b>
+                  <span className="small muted">médiane {fmtMoney(price.perKg, country)}{unit}{price.stale ? ' · semaine passée' : ''}</span>
+                </div>
+                <div className="price-table">
+                  {price.items!.map((it) => (
+                    <a key={it.url} className="price-row" href={it.url} target="_blank" rel="noreferrer">
+                      <span className="grow">{it.name}<span className="small muted block">{new URL(it.url).hostname.replace(/^www\./, '')} ↗</span></span>
+                      <b className="nowrap">{fmtMoney(it.perKg, country)}{unit}</b>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+          <p className="small muted">Produits relevés chaque semaine sur les sites des enseignes (prix au kilo ou au litre). Touche un produit pour ouvrir sa page.</p>
+        </Section>
+      )}
 
       <Section title="Dans mes magasins">
         {mine.length ? (

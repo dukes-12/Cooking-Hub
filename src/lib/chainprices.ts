@@ -9,6 +9,8 @@ export interface ChainPrice {
   n: number;
   min: number;
   stale?: boolean;
+  /** Produits relevés sur le site de l'enseigne (les moins chers d'abord), avec le lien vers leur page. */
+  items?: { url: string; name: string; perKg: number }[];
 }
 interface Payload {
   updatedAt?: string;
@@ -65,6 +67,16 @@ export function chainPrice(ingredientId: string, chainId: string | null, country
   if (!chainId) return null;
   const byId = data[country]?.chains?.[chainId];
   return byId?.[ingredientId] ?? (family ? byId?.[family] : undefined) ?? null;
+}
+
+/** Produits relevés sur les sites des enseignes pour un aliment (ou sa famille), enseigne par enseigne. */
+export function chainProducts(ingredientId: string, country: string, family?: string): { chainId: string; price: ChainPrice }[] {
+  const out: { chainId: string; price: ChainPrice }[] = [];
+  for (const [chainId, byId] of Object.entries(data[country]?.chains ?? {})) {
+    const price = byId[ingredientId] ?? (family ? byId[family] : undefined);
+    if (price?.items?.length) out.push({ chainId, price });
+  }
+  return out.sort((a, b) => a.price.perKg - b.price.perKg);
 }
 
 export function chainPricesUpdatedAt(country: string): string | null {

@@ -806,3 +806,11 @@ describe('grandes familles et emplacements', () => {
     expect(locationOf({ ingredientId: 'lait', qty: 1, addedAt: 0, location: 'congel' }, getIngredient('lait'))).toBe('congel');
   });
 });
+
+describe('pages produit des enseignes', () => {
+  it('garde le nom et la page des produits relevés', async () => {
+    const { productName } = await import('../worker/scraper.js');
+    expect(productName('https://www.continente.pt/produto/bifes-de-peru-continente-4460224.html')).toBe('Bifes de peru continente');
+    expect(productName('https://www.auchan.pt/pt/alimentacao/arroz-agulha-cigala-1kg/40299.html')).toBe('Arroz agulha cigala 1kg');
+  });
+});

@@ -28,6 +28,12 @@ const NON_FOOD = /\/(beleza|higiene|limpeza|casa|bebe|animais|bricolage|jardim|e
 // ---------- 1. Découverte ----------
 
 /** Mots de l'adresse d'une page produit, entre tirets : "-arroz-agulha-cigala-1kg-". */
+/** Nom lisible tiré de l'adresse : « .../bifes-de-peru-continente-4460224.html » → « Bifes de peru continente ». */
+export function productName(url) {
+  const t = slugOf(url).replace(/-/g, ' ').trim().replace(/\s\d{4,}$/, '');
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
 export function slugOf(url) {
   // Auchan met l'identifiant en dernier (".../arroz-agulha-cigala-1kg/40299.html") : on prend alors le segment d'avant.
   const parts = url.split('?')[0].replace(/\.html$/, '').split('/');
@@ -322,11 +328,15 @@ export function appendHistory(history, week, chains) {
  * Synthèse : médiane par enseigne et par ingrédient, publiée dans "chain-prices:PT".
  * Un produit pas encore relevé garde son prix précédent (marqué ancien). withHistory : ajoute la semaine à l'historique.
  */
-async function publishPrices(kv, results, week, now, withHistory) {
+async function publishPrices(kv, results, week, now, withHistory, items = {}) {
   const chains = {};
   for (const [chain, byId] of Object.entries(results ?? {})) {
     chains[chain] = {};
-    for (const [id, values] of Object.entries(byId)) chains[chain][id] = { perKg: Math.round(median(values) * 100) / 100, n: values.length, min: Math.min(...values) };
+    for (const [id, values] of Object.entries(byId)) {
+      // Les produits relevés (les moins chers d'abord, 5 au plus) avec le lien vers leur page.
+      const pages = (items[chain]?.[id] ?? []).sort((a, b) => a.perKg - b.perKg).slice(0, 5);
+      chains[chain][id] = { perKg: Math.round(median(values) * 100) / 100, n: values.length, min: Math.min(...values), ...(pages.length ? { items: pages } : {}) };
+    }
   }
   const previous = await getJson(kv, 'chain-prices:PT', { chains: {} });
   for (const [chain, byId] of Object.entries(previous.chains ?? {})) for (const [id, p] of Object.entries(byId)) if (!chains[chain]?.[id]) (chains[chain] ??= {})[id] = { ...p, stale: true };
@@ -353,7 +363,7 @@ export async function runScraper(env, now = new Date()) {
   // Nouvelle semaine : on (re)découvre les produits si besoin, puis on relève les prix.
   if (state.week !== week || force) {
     // Relevé de la semaine passée resté inachevé : on publie ce qui a été lu plutôt que de le perdre.
-    if (state.phase === 'prices' && Object.keys(state.results ?? {}).length) await publishPrices(kv, state.results, state.week, now, true);
+    if (state.phase === 'prices' && Object.keys(state.results ?? {}).length) await publishPrices(kv, state.results, state.week, now, true, state.items);
     const stale = force || !tracked.at || now - tracked.at > REDISCOVER_DAYS * 86400000;
     const next = { week, phase: stale ? 'discover' : 'prices', sitemaps: null, queue: null, results: {}, log: [] };
     await kv.put('scrape:state', JSON.stringify(next));
@@ -460,7 +470,11 @@ export async function runScraper(env, now = new Date()) {
     for (const { chain, id, url } of batch) {
       try {
         const v = toPerKg(id, parseProductPage(await fetchProductHead(url), url));
-        if (v != null) ((state.results[chain] ??= {})[id] ??= []).push(v);
+        if (v != null) {
+          ((state.results[chain] ??= {})[id] ??= []).push(v);
+          // La page du produit est gardée : l'appli la montre avec son nom et son prix.
+          (((state.items ??= {})[chain] ??= {})[id] ??= []).push({ url, name: productName(url), perKg: v });
+        }
       } catch (e) {
         if (state.log.length < 50) state.log.push(`${url}: ${e.message}`);
       }
@@ -470,14 +484,14 @@ export async function runScraper(env, now = new Date()) {
       // Prix publiés au fil du relevé (toutes les 30 pages environ), sans attendre la fin.
       state.unpublished = (state.unpublished ?? 0) + batch.length;
       if (state.unpublished >= 30) {
-        await publishPrices(kv, state.results, week, now, false);
+        await publishPrices(kv, state.results, week, now, false, state.items);
         state.unpublished = 0;
       }
       await kv.put('scrape:state', JSON.stringify(state));
       return `prix : ${batch.length} pages lues, ${state.queue.length} restantes`;
     }
-    await publishPrices(kv, state.results, week, now, true);
-    Object.assign(state, { phase: 'done', queue: undefined, results: undefined });
+    await publishPrices(kv, state.results, week, now, true, state.items);
+    Object.assign(state, { phase: 'done', queue: undefined, results: undefined, items: undefined });
     await kv.put('scrape:state', JSON.stringify(state));
     return 'prix enregistrés';
   }
