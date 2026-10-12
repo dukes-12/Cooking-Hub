@@ -229,7 +229,11 @@ export interface FridgeItem {
   addedAt: number;
   /** Date de péremption (AAAA-MM-JJ). */
   expiresOn?: string;
+  /** Où il est rangé (par défaut d'après le rayon). */
+  location?: FridgeLocation;
 }
+
+export type FridgeLocation = 'frigo' | 'congel' | 'placard';
 
 export interface ShoppingItem {
   key: string;
@@ -262,4 +266,6 @@ export interface AppState {
   customProducts: Ingredient[];
   /** Libellé de ticket normalisé → produit : appris à chaque ticket validé. */
   labelMemory: Record<string, string>;
+  /** Produits favoris (ajout rapide au frigo, en haut des listes). */
+  favoriteProducts?: string[];
 }

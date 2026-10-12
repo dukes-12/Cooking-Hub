@@ -23,25 +23,28 @@ export function basketTotal(chainId: string, country: string): number {
   return REFERENCE_BASKET.reduce((s, b) => s + (costOf(b.id, b.grams, chainId, country) ?? 0), 0);
 }
 
-export function Stores({ initialTab }: { initialTab?: Tab } = {}) {
+export function Stores({ initialTab, section = 'stores' }: { initialTab?: Tab; section?: 'stores' | 'prices' } = {}) {
   useChainPrices();
   useCommunityPrices(); // le panier type se met à jour quand les prix Open Prices arrivent
   const { state } = useApp();
-  const [tab, setTab] = useState<Tab>(initialTab ?? (state.profile.stores.length ? 'mine' : 'map'));
+  const prices = section === 'prices';
+  const [tab, setTab] = useState<Tab>(initialTab ?? (prices ? 'compare' : state.profile.stores.length ? 'mine' : 'map'));
+  const tabs: [Tab, string][] = prices ? [['compare', 'Comparer'], ['products', 'Produits']] : [['mine', 'Mes magasins'], ['map', 'Carte']];
   return (
     <div className="screen">
       <header className="screen-head">
         <div>
-          <h1>Magasins</h1>
-          <p className="small muted">{state.profile.stores.length} magasin{state.profile.stores.length > 1 ? 's' : ''} · {state.receipts.length} ticket{state.receipts.length > 1 ? 's' : ''}</p>
+          <h1>{prices ? 'Prix' : 'Magasins'}</h1>
+          <p className="small muted">{prices ? 'Comparer les magasins et les produits' : `${state.profile.stores.length} magasin${state.profile.stores.length > 1 ? 's' : ''} · ${state.receipts.length} ticket${state.receipts.length > 1 ? 's' : ''}`}</p>
         </div>
-        <button className="btn btn-primary btn-sm" onClick={() => go('/receipt')}>🧾 Ajouter un ticket</button>
+        {prices ? (
+          <button className="btn btn-soft btn-sm" onClick={() => go('/scan')}>⚡ Relevé</button>
+        ) : (
+          <button className="btn btn-primary btn-sm" onClick={() => go('/receipt')}>🧾 Ajouter un ticket</button>
+        )}
       </header>
       <div className="segmented">
-        <button className={tab === 'mine' ? 'is-active' : ''} onClick={() => setTab('mine')}>Magasins</button>
-        <button className={tab === 'map' ? 'is-active' : ''} onClick={() => setTab('map')}>Carte</button>
-        <button className={tab === 'compare' ? 'is-active' : ''} onClick={() => setTab('compare')}>Comparer</button>
-        <button className={tab === 'products' ? 'is-active' : ''} onClick={() => setTab('products')}>Produits</button>
+        {tabs.map(([id, label]) => <button key={id} className={tab === id ? 'is-active' : ''} onClick={() => setTab(id)}>{label}</button>)}
       </div>
       {tab === 'mine' && <MyStores onMap={() => setTab('map')} />}
       {tab === 'map' && <MapTab />}

@@ -7,7 +7,7 @@ import { useLexiconReady } from './lib/lexicon';
 import { fromHarvestedRecipe, mergeDuplicates } from './lib/importer';
 import { sameFood } from './lib/canonical';
 import { addToFridge, dateIn, defaultShelfDays, presenceOnly } from './lib/pantry';
-import type { AppState, ChosenStore, FridgeItem, Ingredient, PlannedMeal, Profile, Receipt, ReceiptLine, Recipe, ShoppingItem } from './types';
+import type { AppState, ChosenStore, FridgeItem, FridgeLocation, Ingredient, PlannedMeal, Profile, Receipt, ReceiptLine, Recipe, ShoppingItem } from './types';
 import { observationsFromReceipts } from './lib/receipts';
 import { setObservedPrices } from './lib/pricing';
 import { storeKey } from './lib/stores';
@@ -136,6 +136,15 @@ function useStore() {
 
       addFridge: (ingredientId: string, qty: number, expiresOn?: string) =>
         patch((s) => ({ fridge: addToFridge(s.fridge, getIngredient(ingredientId), ingredientId, qty, expiresOn) })),
+      setFridgeLocation: (ingredientId: string, location: FridgeLocation) =>
+        patch((s) => ({ fridge: s.fridge.map((f) => (f.ingredientId === ingredientId ? { ...f, location } : f)) })),
+      /** Revient à un état précédent (bouton « Annuler »). */
+      restore: (snapshot: Partial<AppState>) => patch(() => snapshot),
+      toggleFavoriteProduct: (id: string) =>
+        patch((s) => {
+          const fav = s.favoriteProducts ?? [];
+          return { favoriteProducts: fav.includes(id) ? fav.filter((x) => x !== id) : [id, ...fav] };
+        }),
       setFridgeExpiry: (ingredientId: string, expiresOn: string | undefined) =>
         patch((s) => ({ fridge: s.fridge.map((f) => (f.ingredientId === ingredientId ? { ...f, expiresOn } : f)) })),
       setFridgeQty: (ingredientId: string, qty: number) =>

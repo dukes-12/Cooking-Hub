@@ -1,5 +1,6 @@
 import { customIngredients, getIngredient } from '../data/ingredients';
 import type { Aisle, BaseUnit, Ingredient, NutritionDetails } from '../types';
+import { baseIdForName } from './canonical';
 import { normalize, uid } from './text';
 
 /** Clé d'un libellé de ticket, sans le format : « MISTURA CEBOLA/ALHO CNT FRS 40G » → « mistura cebola alho cnt frs ». */
@@ -25,8 +26,10 @@ export interface Nutrition {
  * le rayon, l'unité, les valeurs nutritionnelles, les étiquettes de régime et le prix de référence.
  * Les valeurs nutritionnelles du paquet (pour 100 g), si on les donne, remplacent celles de la famille.
  */
-export function makeCustomProduct({ name, aisle, unit, familyId, label, barcode, image, packQty, nutrition, details, nutriscore, nova }: { name: string; aisle: Aisle; unit: BaseUnit; familyId?: string; label?: string; barcode?: string; image?: string; packQty?: number; nutrition?: Nutrition; details?: NutritionDetails; nutriscore?: Ingredient['nutriscore']; nova?: number }): Ingredient {
-  const fam = familyId ? getIngredient(familyId) : undefined;
+export function makeCustomProduct({ name, aisle, unit, familyId, label, barcode, image, packQty, nutrition, details, nutriscore, nova, autoFamily = true }: { name: string; aisle: Aisle; unit: BaseUnit; familyId?: string; label?: string; barcode?: string; image?: string; packQty?: number; nutrition?: Nutrition; details?: NutritionDetails; nutriscore?: Ingredient['nutriscore']; nova?: number; autoFamily?: boolean }): Ingredient {
+  // Sans famille donnée : celle que le nom indique (« Œufs bio Continente » → Œuf), pour regrouper les produits.
+  const famId = familyId ?? (autoFamily ? baseIdForName(name) : undefined);
+  const fam = famId ? getIngredient(famId) : undefined;
   const base = {
     id: `mine:${normalize(name).replace(/\s+/g, '-').slice(0, 40)}-${uid().slice(-4)}`,
     name: name.trim(),

@@ -136,9 +136,14 @@ export function Product({ id }: { id: string }) {
             {ing.packQty ? <span className="muted"> · paquet de {ing.packQty} {ing.unit === 'pc' ? 'pièces' : ing.unit}</span> : null}
           </p>
         )}
+        <div className="row gap-sm wrap">
+        <button className={`btn btn-sm ${(state.favoriteProducts ?? []).includes(ing.id) ? 'btn-primary' : 'btn-soft'}`} onClick={() => { actions.toggleFavoriteProduct(ing.id); say((state.favoriteProducts ?? []).includes(ing.id) ? 'Retiré des favoris' : 'Ajouté aux favoris ★'); }}>
+          {(state.favoriteProducts ?? []).includes(ing.id) ? '★ Favori' : '☆ Favori'}
+        </button>
         <button className="btn btn-soft btn-sm" onClick={() => setEditor(ing.custom ? 'edit' : 'exact')}>
           {ing.custom ? '✎ Modifier la fiche (photo, code-barres, nutrition)' : '📸 Ajouter mon produit exact (photo, code-barres, nutrition)'}
         </button>
+        </div>
         {entry && <p className="small muted">🇵🇹 {lexName(entry, 'pt')} · 🇬🇧 {lexName(entry, 'en')}</p>}
       </div>
 

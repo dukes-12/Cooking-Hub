@@ -1,4 +1,4 @@
-import type { FridgeItem, Ingredient } from '../types';
+import type { FridgeItem, FridgeLocation, Ingredient } from '../types';
 
 /**
  * Produits qu'on ne compte pas (épices, huiles, sauces, levure…) : on dit seulement si on en a ou pas.
@@ -55,3 +55,18 @@ export function dateIn(days: number, now = new Date()): string {
   const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + days);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+
+/** Emplacement : celui choisi, sinon d'après le rayon (épicerie et épices au placard, surgelés au congélateur). */
+export function locationOf(item: FridgeItem, ing: Ingredient | undefined): FridgeLocation {
+  if (item.location) return item.location;
+  if (!ing) return 'frigo';
+  if (ing.aisle === 'surgeles') return 'congel';
+  if (['epicerie', 'epices', 'conserves', 'boissons', 'boulangerie'].includes(ing.aisle) || presenceOnly(ing)) return 'placard';
+  return 'frigo';
+}
+
+export const LOCATIONS: { id: FridgeLocation; label: string; emoji: string }[] = [
+  { id: 'frigo', label: 'Frigo', emoji: '🧊' },
+  { id: 'congel', label: 'Congélateur', emoji: '❄️' },
+  { id: 'placard', label: 'Placard', emoji: '🗄️' },
+];

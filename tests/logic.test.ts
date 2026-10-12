@@ -791,3 +791,18 @@ describe('regroupement des produits', () => {
     expect(parseIngredientLine('2 filets de poulet fermier').ingredientId).toBe('poulet');
   });
 });
+
+describe('grandes familles et emplacements', () => {
+  it('rattache un produit à sa famille d’après son nom et range au bon endroit', async () => {
+    const { makeCustomProduct } = await import('../src/lib/custom');
+    const { locationOf } = await import('../src/lib/pantry');
+    const { baseIdForName } = await import('../src/lib/canonical');
+    expect(makeCustomProduct({ name: 'Ovos de galinhas criadas ao ar livre', aisle: 'divers', unit: 'pc' }).family).toBe('oeuf');
+    expect(makeCustomProduct({ name: 'Leite meio gordo Mimosa', aisle: 'divers', unit: 'ml' }).family).toBe('lait');
+    expect(makeCustomProduct({ name: 'Mon mélange maison', aisle: 'epices', unit: 'g', autoFamily: false }).family).toBeUndefined();
+    expect(baseIdForName('Beurre de cacahuète')).not.toBe('beurre');
+    expect(locationOf({ ingredientId: 'riz', qty: 1, addedAt: 0 }, getIngredient('riz'))).toBe('placard');
+    expect(locationOf({ ingredientId: 'lait', qty: 1, addedAt: 0 }, getIngredient('lait'))).toBe('frigo');
+    expect(locationOf({ ingredientId: 'lait', qty: 1, addedAt: 0, location: 'congel' }, getIngredient('lait'))).toBe('congel');
+  });
+});

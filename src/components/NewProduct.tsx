@@ -151,7 +151,7 @@ export function ProductForm({ seed, editing, onDone, onCancel }: { seed?: Produc
         const v = num(det[d.key]);
         if (v != null) details[d.key] = v;
       }
-      let ing = makeCustomProduct({ name, aisle, unit, familyId, label: seed?.label, barcode: barcode.replace(/\D/g, '') || undefined, image: image || undefined, packQty: num(packQty) ?? undefined, nutrition, details, ...scores });
+      let ing = makeCustomProduct({ autoFamily: false, name, aisle, unit, familyId, label: seed?.label, barcode: barcode.replace(/\D/g, '') || undefined, image: image || undefined, packQty: num(packQty) ?? undefined, nutrition, details, ...scores });
       if (editing) ing = { ...ing, id: editing.id, aliases: [...new Set([...editing.aliases, ...ing.aliases])] };
       actions.addCustomProduct(ing);
       if (photo) await savePhoto('products', ing.id, photo);

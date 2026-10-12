@@ -29,7 +29,10 @@ function matchStart(n: string): string | undefined {
     if (n === alias) return id;
     if (!n.startsWith(alias + ' ')) continue;
     const rest = n.slice(alias.length + 1);
-    if (/^(de|d|du|des|a|au|aux|en|com|do|da|dos|das|ao|with|of)\b/.test(rest)) continue;
+    // « beurre de cacahuète », « lait de coco » : le complément est un autre aliment → autre produit.
+    // « ovos de galinhas criadas ao ar livre », « œufs de poules élevées en plein air » : simple précision.
+    const comp = rest.match(/^(?:de|d|du|des|a|au|aux|en|com|do|da|dos|das|ao|with|of)\s+(?:la |l )?(.*)$/);
+    if (comp && (!comp[1] || aliases().some((a) => a.id !== id && (comp[1] === a.alias || comp[1].startsWith(a.alias + ' '))))) continue;
     if (TRANSFORMED.test(rest)) continue;
     return id;
   }

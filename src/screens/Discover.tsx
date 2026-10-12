@@ -5,14 +5,25 @@ import { CATEGORY_LABELS, matchesCuisines } from '../data/reference';
 import type { Match } from '../lib/adapt';
 import { go } from '../router';
 import { useApp } from '../state';
+import { getIngredient } from '../data/ingredients';
+import { isSoon } from '../lib/pantry';
 import type { Category } from '../types';
 
 const FILTERS: (Category | 'all')[] = ['all', 'plat', 'dessert', 'petit-dej', 'soupe', 'salade'];
+
+type Quick = 'fast' | 'fridge' | 'cheap' | 'nooven';
+const QUICK_FILTERS: { id: Quick; label: string; test: (m: Match, budget: number) => boolean }[] = [
+  { id: 'fast', label: '⏱ < 20 min', test: (m) => m.adapted.totalMin != null && m.adapted.totalMin <= 20 },
+  { id: 'fridge', label: '🧊 Avec mon frigo', test: (m) => m.adapted.fridgeCoverage >= 0.5 || m.adapted.expiring.length > 0 },
+  { id: 'cheap', label: '💰 Pas cher', test: (m, budget) => m.adapted.costPerServing != null && m.adapted.costPerServing <= Math.max(1.5, budget * 0.6) },
+  { id: 'nooven', label: '🔥 Sans four', test: (m) => !m.adapted.recipe.equipment.includes('oven') || m.adapted.equipment.some((e) => e.missing === 'oven' && !!e.alternative) },
+];
 
 export function Discover() {
   const { state, actions } = useApp();
   const matches = useMatches();
   const [cat, setCat] = useState<Category | 'all'>('all');
+  const [quick, setQuick] = useState<Quick[]>([]);
   const [toast, setToast] = useState<string | null>(null);
 
   const deck = useMemo(
@@ -21,9 +32,10 @@ export function Discover() {
         .filter((m) => m.adapted.status !== 'incompatible')
         .filter((m) => !state.passed.includes(m.adapted.recipe.id) && !state.favorites.includes(m.adapted.recipe.id))
         .filter((m) => cat === 'all' || m.adapted.recipe.category === cat)
+        .filter((m) => quick.every((q) => QUICK_FILTERS.find((f) => f.id === q)!.test(m, state.profile.budgetPerServing)))
         .filter((m) => matchesCuisines(m.adapted.recipe, state.profile.cuisines))
         .sort((a, b) => b.score - a.score),
-    [matches, state.passed, state.favorites, cat, state.profile.cuisines],
+    [matches, state.passed, state.favorites, cat, quick, state.profile.cuisines, state.profile.budgetPerServing],
   );
 
   const flash = (msg: string) => {
@@ -57,6 +69,12 @@ export function Discover() {
           {(state.profile.name || '🙂').slice(0, 1).toUpperCase()}
         </button>
       </header>
+      <Today />
+      <div className="chips scroll-x">
+        {QUICK_FILTERS.map((f) => (
+          <Chip key={f.id} active={quick.includes(f.id)} onClick={() => setQuick(quick.includes(f.id) ? quick.filter((q) => q !== f.id) : [...quick, f.id])}>{f.label}</Chip>
+        ))}
+      </div>
       <div className="chips scroll-x">
         {FILTERS.map((f) => (
           <Chip key={f} active={cat === f} onClick={() => setCat(f)}>
@@ -181,5 +199,36 @@ function SwipeCard({ match, depth, onDecide }: { match: Match; depth: number; on
         {a.equipment.filter((e) => e.alternative).length > 0 && <p className="small muted">🔧 Adaptée à ton équipement</p>}
       </div>
     </article>
+  );
+}
+
+/** Tableau de bord du jour : ce qui périme, le prochain repas du menu, la liste de courses. */
+function Today() {
+  const { state, recipes } = useApp();
+  const matches = useMatches();
+  const soon = state.fridge.filter((f) => isSoon(f));
+  const antiWaste = matches.filter((m) => m.adapted.status !== 'incompatible' && m.adapted.expiring.length > 0).length;
+  const next = state.menu.map((m) => recipes[m.recipeId]).find(Boolean);
+  const toBuy = state.shopping.filter((i) => !i.checked).length;
+  return (
+    <div className="today scroll-x">
+      {soon.length > 0 && (
+        <button className="today-card warn" onClick={() => go('/fridge')}>
+          <span className="today-emoji">⏰</span>
+          <b>{soon.length} produit{soon.length > 1 ? 's' : ''} à consommer vite</b>
+          <span className="small">{antiWaste ? `${antiWaste} recette${antiWaste > 1 ? 's' : ''} pour les utiliser` : soon.map((f) => getIngredient(f.ingredientId)?.name).filter(Boolean).slice(0, 2).join(', ')}</span>
+        </button>
+      )}
+      <button className="today-card" onClick={() => (next ? go(`/recipe/${next.id}`) : go('/menu'))}>
+        <span className="today-emoji">🍽️</span>
+        <b>{next ? next.title : 'Rien au menu'}</b>
+        <span className="small muted">{next ? `au menu · ${state.menu.length} repas prévu${state.menu.length > 1 ? 's' : ''}` : 'Choisis tes repas de la semaine'}</span>
+      </button>
+      <button className="today-card" onClick={() => go('/shopping')}>
+        <span className="today-emoji">🛒</span>
+        <b>{toBuy ? `${toBuy} article${toBuy > 1 ? 's' : ''} à acheter` : 'Liste de courses vide'}</b>
+        <span className="small muted">{toBuy ? 'Voir la liste' : 'Elle se remplit avec ton menu'}</span>
+      </button>
+    </div>
   );
 }

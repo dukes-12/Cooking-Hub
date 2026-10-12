@@ -1,3 +1,5 @@
+import { QuickAdd } from './components/QuickAdd';
+import { ToastHost } from './components/ToastHost';
 import { BurstScan } from './screens/BurstScan';
 import { CookMode } from './screens/CookMode';
 import { Discover } from './screens/Discover';
@@ -27,6 +29,7 @@ const TABS = [
   { id: 'fridge', label: 'Frigo', icon: '🧊' },
   { id: 'shopping', label: 'Courses', icon: '🛒' },
   { id: 'stores', label: 'Magasins', icon: '🏪' },
+  { id: 'prices', label: 'Prix', icon: '💶' },
 ];
 
 export function App() {
@@ -63,7 +66,8 @@ export function App() {
     case 'profile': screen = <Profile />; break;
     case 'import': screen = <Import />; break;
     case 'stores': screen = <Stores />; break;
-    case 'products': screen = <Stores key="products" initialTab="products" />; break;
+    case 'prices': screen = <Stores key="prices" section="prices" />; break;
+    case 'products': screen = <Stores key="products" section="prices" initialTab="products" />; break;
     case 'store': screen = <StoreDetail key={param} storeKey={param ?? ''} />; break;
     case 'product': screen = <Product key={param} id={param ?? ''} />; break;
     case 'receipt': screen = <ReceiptImport key={param} storeKey={param} />; break;
@@ -75,10 +79,12 @@ export function App() {
   return (
     <div className={`app ${showTabs ? 'with-tabs' : ''}`}>
       <main>{screen}</main>
+      {showTabs && <QuickAdd />}
+      <ToastHost />
       {showTabs && (
         <nav className="tabbar">
           {TABS.map((t) => (
-            <button key={t.id} className={page === t.id || (t.id === 'discover' && (page === 'profile' || page === 'search')) || (t.id === 'stores' && (page === 'store' || page === 'products')) ? 'is-active' : ''} onClick={() => go('/' + t.id)}>
+            <button key={t.id} className={page === t.id || (t.id === 'discover' && (page === 'profile' || page === 'search')) || (t.id === 'stores' && page === 'store') || (t.id === 'prices' && page === 'products') ? 'is-active' : ''} onClick={() => go('/' + t.id)}>
               <span className="tab-icon">{t.icon}{t.id === 'shopping' && pendingShopping > 0 && <i className="tab-badge">{pendingShopping}</i>}</span>
               <span>{t.label}</span>
             </button>

@@ -44,7 +44,8 @@ export function Products() {
 
   const rows = useMemo(() => {
     const n = normalize(q);
-    let list: Ingredient[] = [...customIngredients(), ...INGREDIENTS];
+    // Mes produits rattachés à une grande famille sont sur la fiche de la famille, pas en double dans la liste.
+    let list: Ingredient[] = [...customIngredients().filter((c) => !c.family || n), ...INGREDIENTS];
     if (n) {
       list = list.filter((i) => [i.name, ...i.aliases].some((x) => normalize(x).includes(n)));
       // Recherche aussi dans le dictionnaire multilingue (artichaut, alcachofra…).
@@ -61,11 +62,13 @@ export function Products() {
       const prices: StorePrice[] = state.profile.stores.length ? pricesInMyStores(ing.id, state.profile, observations) : (pricesEverywhere(ing.id).find((g) => g.country.code === state.profile.country)?.prices ?? []);
       return { ing, best: prices.find((p) => p.perKg != null) ?? null, count: bought.get(ing.id) ?? 0 };
     });
+    const fav = state.favoriteProducts ?? [];
     return out.sort((a, b) =>
-      sort === 'price' ? (a.best?.perKg ?? Infinity) - (b.best?.perKg ?? Infinity) : sort === 'bought' ? b.count - a.count || a.ing.name.localeCompare(b.ing.name, 'fr') : a.ing.name.localeCompare(b.ing.name, 'fr'),
+      Number(fav.includes(b.ing.id)) - Number(fav.includes(a.ing.id)) ||
+      (sort === 'price' ? (a.best?.perKg ?? Infinity) - (b.best?.perKg ?? Infinity) : sort === 'bought' ? b.count - a.count || a.ing.name.localeCompare(b.ing.name, 'fr') : a.ing.name.localeCompare(b.ing.name, 'fr')),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, aisle, sort, state.profile, observations, bought, lexReady, v]);
+  }, [q, aisle, sort, state.profile, state.favoriteProducts, observations, bought, lexReady, v]);
 
   const aisles = (Object.keys(AISLE_LABELS) as Aisle[]).filter((a) => INGREDIENTS.some((i) => i.aisle === a)).sort((a, b) => AISLE_LABELS[a].order - AISLE_LABELS[b].order);
 
@@ -97,7 +100,9 @@ export function Products() {
               <ProductThumb ing={ing} />
               <span className="grow">
                 {ing.name}
+                {(state.favoriteProducts ?? []).includes(ing.id) && ' ★'}
                 {ing.custom && <span className="badge badge-good">à moi</span>}
+                {!ing.custom && customIngredients().some((c) => c.family === ing.id) && <span className="badge">{customIngredients().filter((c) => c.family === ing.id).length} à moi</span>}
                 <span className="small muted block">
                   {best ? `${best.store ? storeTitle(best.store) : best.chain.name} · ${best.source ? SOURCE_LABEL[best.source] : ''}` : 'pas de prix'}
                   {count ? ` · acheté ${count} fois` : ''}

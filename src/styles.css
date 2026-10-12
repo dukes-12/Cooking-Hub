@@ -27,17 +27,19 @@
   --shadow: 0 6px 24px rgba(60, 35, 10, 0.08);
   --shadow-lg: 0 18px 40px rgba(60, 35, 10, 0.18);
   --tabbar-h: 68px;
+  --card-border: transparent;
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #17120e;
-    --surface: #221b15;
-    --surface-2: #2c231b;
-    --text: #f5ece3;
-    --muted: #b3a597;
-    --line: #3a2f25;
+    --bg: #120e0b;
+    --surface: #251e18;
+    --surface-2: #30271f;
+    --text: #f7efe6;
+    --muted: #bfb1a3;
+    --line: #42362b;
+    --card-border: rgba(255, 236, 214, 0.07);
     --series-1: #3987e5;
     --series-2: #d95926;
     --series-3: #199e70;
@@ -460,3 +462,34 @@ div.ticket > .ticket-line.is-unmatched { border-left-color: var(--warn); }
 .stepper-input { width: 3.6rem; text-align: center; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 600; padding: 0; -moz-appearance: textfield; }
 .stepper-input::-webkit-outer-spin-button, .stepper-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .cooked-row { flex-wrap: wrap; }
+
+/* Mode sombre : cartes détachées du fond (contour léger), textes atténués lisibles */
+.card, .recipe-row, .ingredients, .price-table, .macros, .steps li, .shop-item, .fridge-item, .accordion, .store-card,
+div.ticket > .ticket-line, .off-item, .stats div, .cook-ings, .cook-timer, .table-scroll, .choice-card, .picker-results, .radio-card, .store-item, .sheet {
+  border: 1px solid var(--card-border);
+}
+@media (prefers-color-scheme: dark) {
+  .badge { filter: saturate(1.1) brightness(1.08); }
+  .chip:not(.is-active) { border-color: var(--line); }
+  .tabbar { background: color-mix(in srgb, var(--bg) 88%, transparent); }
+}
+.fab { position: fixed; right: max(16px, calc(50vw - 280px + 16px)); bottom: calc(var(--tabbar-h) + 16px + env(safe-area-inset-bottom)); width: 56px; height: 56px; border-radius: 50%; border: 0; background: var(--primary); color: var(--primary-ink); font-size: 1.8rem; line-height: 1; box-shadow: var(--shadow-lg); z-index: 40; display: flex; align-items: center; justify-content: center; }
+.fab:active { transform: scale(0.94); }
+.quick-emoji { font-size: 1.5rem; width: 2rem; text-align: center; }
+.toast-undo { display: flex; align-items: center; gap: 0.8rem; bottom: calc(var(--tabbar-h) + 84px + env(safe-area-inset-bottom)); }
+.toast-action { background: none; border: 0; color: var(--primary); font-weight: 700; padding: 0.2rem 0.4rem; }
+.today { display: flex; gap: 0.6rem; margin: 0.2rem -16px 0.4rem; padding: 0 16px 4px; }
+.today-card { flex: 0 0 auto; width: 62%; max-width: 240px; display: flex; flex-direction: column; gap: 0.15rem; text-align: left; background: var(--surface); border: 1px solid var(--card-border); border-radius: 16px; padding: 0.7rem 0.85rem; box-shadow: var(--shadow); color: inherit; font: inherit; }
+.today-card b { font-size: 0.95rem; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.today-card.warn { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+.today-card.warn .small { color: var(--warn); }
+.today-emoji { font-size: 1.3rem; }
+.swipe-row { position: relative; border-radius: 14px; overflow: hidden; touch-action: pan-y; }
+.swipe-front { position: relative; z-index: 1; user-select: none; -webkit-user-select: none; }
+.swipe-bg { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 1.1rem; font-weight: 700; color: #fff; border-radius: 14px; opacity: 0.85; }
+.swipe-left { justify-content: flex-end; background: var(--danger); }
+.swipe-right { justify-content: flex-start; background: var(--good); }
+.swipe-bg.is-armed { opacity: 1; }
+.choice-card.row { flex-direction: row; align-items: center; justify-content: flex-start; text-align: left; padding: 0.7rem 0.9rem; }
+.choice-card.row .grow { display: flex; flex-direction: column; align-items: flex-start; }
+.toast-undo { width: calc(100% - 32px); max-width: 520px; border-radius: 16px; padding: 0.75rem 1rem; }
