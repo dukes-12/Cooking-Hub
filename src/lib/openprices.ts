@@ -195,3 +195,32 @@ export function communityPricePerKg(ingredientId: string, chainId: string | null
   if (s.perKg != null && n >= 3) return { value: s.perKg * (chainId ? (getChain(chainId)?.index ?? 1) : 1), level: 'country' };
   return null;
 }
+
+export interface BarcodePrice {
+  chainId?: string;
+  brand: string;
+  /** Prix du paquet (ou au kilo quand le relevé est au poids). */
+  price: number;
+  perKg: boolean;
+  date: string;
+  count: number;
+}
+
+/** Prix relevés par la communauté pour un produit exact (code-barres) : le plus récent par enseigne. */
+export async function fetchBarcodePrices(code: string, country: string): Promise<BarcodePrice[]> {
+  const currency = getCountry(country).currency;
+  const res = await fetch(`/api/prices?code=${encodeURIComponent(code)}&country=${country}&currency=${currency}`);
+  if (!res.ok) return [];
+  const items = ((await res.json()) as { items?: CommunityPrice[] }).items ?? [];
+  const groups = new Map<string, BarcodePrice>();
+  for (const p of [...items].sort((a, b) => b.date.localeCompare(a.date))) {
+    const price = p.unit ?? p.perKg;
+    if (price == null) continue;
+    const chain = p.brand ? matchChain(p.brand, country) : undefined;
+    const key = chain?.id ?? (p.brand.toLowerCase() || '?');
+    const g = groups.get(key);
+    if (g) g.count++;
+    else groups.set(key, { chainId: chain?.id, brand: chain?.name ?? (p.brand || 'Magasin inconnu'), price, perKg: p.unit == null, date: p.date, count: 1 });
+  }
+  return [...groups.values()].sort((a, b) => a.price - b.price);
+}

@@ -14,6 +14,11 @@ export interface OffProduct {
   protein: number | null;
   carbs: number | null;
   fat: number | null;
+  satFat?: number | null;
+  sugars?: number | null;
+  fiber?: number | null;
+  salt?: number | null;
+  nova?: number | null;
 }
 
 export const offProductUrl = (code: string) => `https://world.openfoodfacts.org/product/${code}`;

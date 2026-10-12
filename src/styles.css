@@ -423,3 +423,6 @@ div.ticket > .ticket-line.is-unmatched { border-left-color: var(--warn); }
 .nutri-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; margin-bottom: 0.4rem; }
 .nutri-grid label { display: flex; flex-direction: column; gap: 0.15rem; }
 .product-emoji img { width: 1.8rem; height: 1.8rem; object-fit: cover; border-radius: 6px; display: block; }
+.nutri-table { width: 100%; border-collapse: collapse; margin-top: 0.6rem; font-size: 0.92rem; }
+.nutri-table td { padding: 0.35rem 0.2rem; border-bottom: 1px solid var(--line, rgba(127,127,127,0.2)); }
+.nutri-table td:last-child { text-align: right; font-weight: 600; }

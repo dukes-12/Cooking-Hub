@@ -10,6 +10,10 @@ export interface PackLabel {
   protein: number | null;
   carbs: number | null;
   fat: number | null;
+  satFat: number | null;
+  sugars: number | null;
+  fiber: number | null;
+  salt: number | null;
   barcode: string | null;
 }
 

@@ -224,7 +224,7 @@ const LABEL_PROMPT = `Ces photos montrent l'emballage d'un produit alimentaire (
 Renvoie :
 - name : nom du produit en français (traduis s'il est en portugais ou en anglais), sans la marque ; brand : la marque ;
 - quantity : contenu du paquet (nombre) et quantityUnit (g, ml ou pc) ;
-- kcal, protein, carbs, fat : valeurs POUR 100 g (ou 100 ml) lues dans le tableau nutritionnel (énergie en kcal, pas en kJ) ;
+- kcal, protein, carbs, fat, satFat (acides gras saturés), sugars (sucres), fiber (fibres), salt (sel) : valeurs POUR 100 g (ou 100 ml) lues dans le tableau nutritionnel (énergie en kcal, pas en kJ) ;
 - barcode : les chiffres sous le code-barres s'ils sont lisibles.
 N'invente rien : si une valeur est illisible ou absente, mets null. found = false si ce n'est pas un produit alimentaire.`;
 
@@ -240,9 +240,13 @@ const LABEL_SCHEMA = {
     protein: nullable('number'),
     carbs: nullable('number'),
     fat: nullable('number'),
+    satFat: nullable('number'),
+    sugars: nullable('number'),
+    fiber: nullable('number'),
+    salt: nullable('number'),
     barcode: nullable('string'),
   },
-  required: ['found', 'name', 'brand', 'quantity', 'quantityUnit', 'kcal', 'protein', 'carbs', 'fat', 'barcode'],
+  required: ['found', 'name', 'brand', 'quantity', 'quantityUnit', 'kcal', 'protein', 'carbs', 'fat', 'satFat', 'sugars', 'fiber', 'salt', 'barcode'],
   additionalProperties: false,
 };
 
@@ -417,9 +421,14 @@ function compactProduct(p) {
     protein: num(n.proteins_100g),
     carbs: num(n.carbohydrates_100g),
     fat: num(n.fat_100g),
+    satFat: num(n['saturated-fat_100g']),
+    sugars: num(n.sugars_100g),
+    fiber: num(n.fiber_100g),
+    salt: num(n.salt_100g),
+    nova: num(p.nova_group),
   };
 }
-const OFF_FIELDS = 'code,product_name,generic_name,brands,quantity,product_quantity,product_quantity_unit,image_front_small_url,image_front_url,nutriscore_grade,categories_tags,nutriments';
+const OFF_FIELDS = 'code,product_name,generic_name,brands,quantity,product_quantity,product_quantity_unit,image_front_small_url,image_front_url,nutriscore_grade,nova_group,categories_tags,nutriments';
 
 /** Fiche Open Food Facts d'un produit emballé, par son code-barres. */
 export async function offProduct(code, ua, fetchImpl = fetch) {

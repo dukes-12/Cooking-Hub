@@ -1,5 +1,5 @@
 import { customIngredients, getIngredient } from '../data/ingredients';
-import type { Aisle, BaseUnit, Ingredient } from '../types';
+import type { Aisle, BaseUnit, Ingredient, NutritionDetails } from '../types';
 import { normalize, uid } from './text';
 
 /** Clé d'un libellé de ticket, sans le format : « MISTURA CEBOLA/ALHO CNT FRS 40G » → « mistura cebola alho cnt frs ». */
@@ -25,7 +25,7 @@ export interface Nutrition {
  * le rayon, l'unité, les valeurs nutritionnelles, les étiquettes de régime et le prix de référence.
  * Les valeurs nutritionnelles du paquet (pour 100 g), si on les donne, remplacent celles de la famille.
  */
-export function makeCustomProduct({ name, aisle, unit, familyId, label, barcode, image, packQty, nutrition }: { name: string; aisle: Aisle; unit: BaseUnit; familyId?: string; label?: string; barcode?: string; image?: string; packQty?: number; nutrition?: Nutrition }): Ingredient {
+export function makeCustomProduct({ name, aisle, unit, familyId, label, barcode, image, packQty, nutrition, details, nutriscore, nova }: { name: string; aisle: Aisle; unit: BaseUnit; familyId?: string; label?: string; barcode?: string; image?: string; packQty?: number; nutrition?: Nutrition; details?: NutritionDetails; nutriscore?: Ingredient['nutriscore']; nova?: number }): Ingredient {
   const fam = familyId ? getIngredient(familyId) : undefined;
   const base = {
     id: `mine:${normalize(name).replace(/\s+/g, '-').slice(0, 40)}-${uid().slice(-4)}`,
@@ -35,6 +35,9 @@ export function makeCustomProduct({ name, aisle, unit, familyId, label, barcode,
     ...(barcode ? { barcode } : {}),
     ...(image ? { image } : {}),
     ...(packQty ? { packQty } : {}),
+    ...(details && Object.keys(details).length ? { details } : {}),
+    ...(nutriscore ? { nutriscore } : {}),
+    ...(nova ? { nova } : {}),
   };
   if (fam) {
     return { ...fam, ...base, aisle: fam.aisle, unit: fam.unit, family: fam.id, subs: [fam.id, ...(fam.subs ?? [])], staple: fam.staple, ...(nutrition ?? {}), partial: !!fam.partial && !nutrition };

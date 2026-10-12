@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ExactPrices } from '../components/ExactPrices';
 import { ProductForm } from '../components/NewProduct';
 import { Chip, Empty, Section, Sheet } from '../components/ui';
 import { useMyPhoto } from '../lib/photoStore';
@@ -152,13 +153,29 @@ export function Product({ id }: { id: string }) {
       </div>
 
       {!ing.partial ? (
-        <Section title="Pour 100 g">
+        <Section title={`Pour 100 ${ing.unit === 'ml' ? 'ml' : 'g'}`}>
           <div className="stats">
             <div><b>{ing.kcal}</b><span>kcal</span></div>
             <div><b>{ing.protein} g</b><span>protéines</span></div>
             <div><b>{ing.carbs} g</b><span>glucides</span></div>
             <div><b>{ing.fat} g</b><span>lipides</span></div>
           </div>
+          {ing.details && (
+            <table className="nutri-table">
+              <tbody>
+                {ing.details.satFat != null && <tr><td>dont acides gras saturés</td><td>{ing.details.satFat} g</td></tr>}
+                {ing.details.sugars != null && <tr><td>dont sucres</td><td>{ing.details.sugars} g</td></tr>}
+                {ing.details.fiber != null && <tr><td>Fibres</td><td>{ing.details.fiber} g</td></tr>}
+                {ing.details.salt != null && <tr><td>Sel</td><td>{ing.details.salt} g</td></tr>}
+              </tbody>
+            </table>
+          )}
+          {(ing.nutriscore || ing.nova) && (
+            <p className="row gap small">
+              {ing.nutriscore && <span className="row gap-sm">Nutri-Score <span className={`nutriscore ns-${ing.nutriscore}`}>{ing.nutriscore.toUpperCase()}</span></span>}
+              {ing.nova && <span className="badge">NOVA {ing.nova}{ing.nova === 4 ? ' · ultra-transformé' : ing.nova === 1 ? ' · brut' : ''}</span>}
+            </p>
+          )}
         </Section>
       ) : offNutrition ? (
         <Section title="Pour 100 g (moyenne)">
@@ -171,6 +188,8 @@ export function Product({ id }: { id: string }) {
           <p className="small muted">Valeurs médianes de {offNutrition.n} produits de ce rayon sur Open Food Facts.</p>
         </Section>
       ) : null}
+
+      <ExactPrices ing={ing} onSaved={say} />
 
       <Section title="Dans mes magasins">
         {mine.length ? (

@@ -7,7 +7,7 @@ import { fetchProductByCode, type OffProduct } from '../lib/off';
 import { ingredientForCategories } from '../lib/openprices';
 import { deletePhoto, savePhoto, useMyPhoto } from '../lib/photoStore';
 import { useApp } from '../state';
-import type { Aisle, BaseUnit, Ingredient } from '../types';
+import type { Aisle, BaseUnit, Ingredient, NutritionDetails } from '../types';
 import { IngredientPicker } from './ui';
 
 const UNITS: { id: BaseUnit; label: string }[] = [
@@ -17,10 +17,17 @@ const UNITS: { id: BaseUnit; label: string }[] = [
 ];
 
 const NUTRIENTS: { key: keyof Nutrition; label: string }[] = [
-  { key: 'kcal', label: 'kcal' },
-  { key: 'protein', label: 'Protéines (g)' },
-  { key: 'carbs', label: 'Glucides (g)' },
+  { key: 'kcal', label: 'Énergie (kcal)' },
   { key: 'fat', label: 'Lipides (g)' },
+  { key: 'carbs', label: 'Glucides (g)' },
+  { key: 'protein', label: 'Protéines (g)' },
+];
+
+const DETAILS: { key: keyof NutritionDetails; label: string }[] = [
+  { key: 'satFat', label: 'dont saturés (g)' },
+  { key: 'sugars', label: 'dont sucres (g)' },
+  { key: 'fiber', label: 'Fibres (g)' },
+  { key: 'salt', label: 'Sel (g)' },
 ];
 
 /** Point de départ d'une fiche : libellé du ticket, produit générique reconnu, code-barres scanné… */
@@ -53,6 +60,8 @@ export function ProductForm({ seed, editing, onDone, onCancel }: { seed?: Produc
     const has = editing && !editing.partial && (!editing.family || editing.kcal !== getIngredient(editing.family)?.kcal);
     return { kcal: has ? str(editing.kcal) : '', protein: has ? str(editing.protein) : '', carbs: has ? str(editing.carbs) : '', fat: has ? str(editing.fat) : '' };
   });
+  const [det, setDet] = useState<Record<keyof NutritionDetails, string>>({ satFat: str(editing?.details?.satFat), sugars: str(editing?.details?.sugars), fiber: str(editing?.details?.fiber), salt: str(editing?.details?.salt) });
+  const [scores, setScores] = useState<{ nutriscore?: Ingredient['nutriscore']; nova?: number }>({ nutriscore: editing?.nutriscore, nova: editing?.nova });
   const [photo, setPhoto] = useState<File | null>(null);
   const [dropPhoto, setDropPhoto] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -64,9 +73,10 @@ export function ProductForm({ seed, editing, onDone, onCancel }: { seed?: Produc
   const family = familyId ? getIngredient(familyId) : undefined;
   const shown = preview ?? (dropPhoto ? null : myPhoto) ?? (image || null);
 
-  const fillNutrition = (v: Partial<Record<keyof Nutrition, number | null>>) => {
+  const fillNutrition = (v: Partial<Record<keyof Nutrition | keyof NutritionDetails, number | null>>) => {
     if (v.kcal == null) return false;
     setNut({ kcal: str(v.kcal), protein: str(v.protein ?? 0), carbs: str(v.carbs ?? 0), fat: str(v.fat ?? 0) });
+    setDet({ satFat: str(v.satFat), sugars: str(v.sugars), fiber: str(v.fiber), salt: str(v.salt) });
     return true;
   };
   const fillPack = (qty: number | null, u: string | null) => {
@@ -82,6 +92,7 @@ export function ProductForm({ seed, editing, onDone, onCancel }: { seed?: Produc
     if (p.image) setImage(p.image);
     if (!familyId) setFamilyId(ingredientForCategories(p.categories));
     fillPack(p.qty, p.qtyUnit);
+    setScores({ nutriscore: p.nutriscore ?? undefined, nova: p.nova ?? undefined });
     return fillNutrition(p);
   };
   useEffect(() => {
@@ -133,7 +144,12 @@ export function ProductForm({ seed, editing, onDone, onCancel }: { seed?: Produc
     run('save', async () => {
       const kcal = num(nut.kcal);
       const nutrition: Nutrition | undefined = kcal != null ? { kcal, protein: num(nut.protein) ?? 0, carbs: num(nut.carbs) ?? 0, fat: num(nut.fat) ?? 0 } : undefined;
-      let ing = makeCustomProduct({ name, aisle, unit, familyId, label: seed?.label, barcode: barcode.replace(/\D/g, '') || undefined, image: image || undefined, packQty: num(packQty) ?? undefined, nutrition });
+      const details: NutritionDetails = {};
+      for (const d of DETAILS) {
+        const v = num(det[d.key]);
+        if (v != null) details[d.key] = v;
+      }
+      let ing = makeCustomProduct({ name, aisle, unit, familyId, label: seed?.label, barcode: barcode.replace(/\D/g, '') || undefined, image: image || undefined, packQty: num(packQty) ?? undefined, nutrition, details, ...scores });
       if (editing) ing = { ...ing, id: editing.id, aliases: [...new Set([...editing.aliases, ...ing.aliases])] };
       actions.addCustomProduct(ing);
       if (photo) await savePhoto('products', ing.id, photo);
@@ -218,6 +234,12 @@ export function ProductForm({ seed, editing, onDone, onCancel }: { seed?: Produc
             <label key={n.key}>
               <span className="small muted">{n.label}</span>
               <input className="input" type="number" inputMode="decimal" min={0} step="0.1" value={nut[n.key]} placeholder={family && !family.partial ? str(family[n.key]) : '—'} onChange={(e) => setNut({ ...nut, [n.key]: e.target.value })} />
+            </label>
+          ))}
+          {DETAILS.map((d) => (
+            <label key={d.key}>
+              <span className="small muted">{d.label}</span>
+              <input className="input" type="number" inputMode="decimal" min={0} step="0.1" value={det[d.key]} placeholder="—" onChange={(e) => setDet({ ...det, [d.key]: e.target.value })} />
             </label>
           ))}
         </div>

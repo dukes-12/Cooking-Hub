@@ -35,6 +35,13 @@ export type FoodTag =
 
 export type BaseUnit = 'g' | 'ml' | 'pc';
 
+export interface NutritionDetails {
+  satFat?: number;
+  sugars?: number;
+  fiber?: number;
+  salt?: number;
+}
+
 export interface Ingredient {
   id: string;
   name: string;
@@ -70,6 +77,11 @@ export interface Ingredient {
   image?: string;
   /** Contenu du paquet, dans l'unité du produit (g, ml ou pièces). */
   packQty?: number;
+  /** Détail du tableau nutritionnel du paquet (pour 100 g ou 100 ml). */
+  details?: NutritionDetails;
+  nutriscore?: 'a' | 'b' | 'c' | 'd' | 'e';
+  /** Groupe NOVA (1 = brut … 4 = ultra-transformé). */
+  nova?: number;
 }
 
 export type Unit = BaseUnit | 'kg' | 'cl' | 'l' | 'cas' | 'cac' | 'pincee' | 'gousse' | 'tranche' | 'botte' | 'sachet';
