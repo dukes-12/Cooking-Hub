@@ -285,9 +285,10 @@ async function diagnose(kv, urls) {
         continue;
       }
       if (entry.grep) {
-        // Lignes contenant un motif (ex. « sitemap » dans un long robots.txt).
-        const re = new RegExp(entry.grep, 'i');
-        out.push({ url, status: res.status, bytes: text.length, lines: text.split('\n').filter((l) => re.test(l)).slice(0, 40), ms: Date.now() - t0 });
+        // Passages correspondant à un motif (ex. « Sitemap: … » d'un robots.txt, adresses d'un sitemap).
+        const re = new RegExp(entry.grep, 'gi');
+        const all = [...text.matchAll(re)];
+        out.push({ url, status: res.status, bytes: text.length, count: all.length, lines: all.slice(0, entry.limit ?? 15).map((m) => m[0].slice(0, 200)), ms: Date.now() - t0 });
         continue;
       }
       const recipe = /<html/i.test(text) ? extractRecipe(text) : null;
