@@ -23,14 +23,14 @@ export default {
     // Une seule tâche par passage (le forfait gratuit limite le calcul par passage) :
     //  - à :00, :20, :40 → relevé des prix des enseignes portugaises (scraper.js) ;
     //  - à :10 et :50 → récolte de recettes (recipes.js) ; à :30 → illustrations IA à pré-générer (recipeImages.js).
-    // Quand les prix de la semaine sont relevés, les créneaux des prix servent aussi aux recettes.
+    // Quand les prix de la semaine sont relevés, les créneaux des prix servent aussi aux recettes, et inversement.
     const minute = new Date(event.scheduledTime).getUTCMinutes();
     const task =
       minute % 20 === 0
         ? runScraper(env).then((msg) => (msg === 'rien à faire cette semaine' ? runRecipes(env) : msg))
         : minute === 30
           ? warmRecipeImages(env).then((msg) => msg ?? runRecipes(env))
-          : runRecipes(env).then((msg) => (msg.includes('rien à faire') ? warmRecipeImages(env).then((m) => m ?? msg) : msg));
+          : runRecipes(env).then((msg) => (msg.includes('rien à faire') ? warmRecipeImages(env).then((m) => m ?? runScraper(env)) : msg));
     ctx.waitUntil(task.then((msg) => console.log('cron:', msg)));
   },
   async fetch(request, env) {

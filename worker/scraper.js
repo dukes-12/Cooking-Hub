@@ -311,6 +311,22 @@ export function appendHistory(history, week, chains) {
 }
 
 /** Un passage : avance d'une étape (un sitemap, ou quelques pages produit, ou la synthèse). */
+/**
+ * Synthèse : médiane par enseigne et par ingrédient, publiée dans "chain-prices:PT".
+ * Un produit pas encore relevé garde son prix précédent (marqué ancien). withHistory : ajoute la semaine à l'historique.
+ */
+async function publishPrices(kv, results, week, now, withHistory) {
+  const chains = {};
+  for (const [chain, byId] of Object.entries(results ?? {})) {
+    chains[chain] = {};
+    for (const [id, values] of Object.entries(byId)) chains[chain][id] = { perKg: Math.round(median(values) * 100) / 100, n: values.length, min: Math.min(...values) };
+  }
+  const previous = await getJson(kv, 'chain-prices:PT', { chains: {} });
+  for (const [chain, byId] of Object.entries(previous.chains ?? {})) for (const [id, p] of Object.entries(byId)) if (!chains[chain]?.[id]) (chains[chain] ??= {})[id] = { ...p, stale: true };
+  await kv.put('chain-prices:PT', JSON.stringify({ updatedAt: now.toISOString(), week, chains, source: 'Sites des enseignes (pages produit publiques)' }));
+  if (withHistory) await kv.put('chain-history:PT', JSON.stringify(appendHistory(await getJson(kv, 'chain-history:PT', { series: {} }), week, chains)));
+}
+
 export async function runScraper(env, now = new Date()) {
   const kv = env.PRICES;
   const diag = await kv.get('scrape:diag', 'json');
@@ -329,6 +345,8 @@ export async function runScraper(env, now = new Date()) {
 
   // Nouvelle semaine : on (re)découvre les produits si besoin, puis on relève les prix.
   if (state.week !== week || force) {
+    // Relevé de la semaine passée resté inachevé : on publie ce qui a été lu plutôt que de le perdre.
+    if (state.phase === 'prices' && Object.keys(state.results ?? {}).length) await publishPrices(kv, state.results, state.week, now, true);
     const stale = force || !tracked.at || now - tracked.at > REDISCOVER_DAYS * 86400000;
     const next = { week, phase: stale ? 'discover' : 'prices', sitemaps: null, queue: null, results: {}, log: [] };
     await kv.put('scrape:state', JSON.stringify(next));
@@ -422,9 +440,14 @@ export async function runScraper(env, now = new Date()) {
       return `prix : ${state.queue.length} pages à lire`;
     }
     if (state.current && now - (state.current.startedAt ?? 0) < 5 * 60000) return 'passage précédent en cours';
-    // Pages Continente très lourdes : 2 au plus par passage.
+    // Enseignes mélangées dans chaque passage ; pages Continente très lourdes : 2 au plus.
     const batch = [];
-    while (state.queue.length && batch.length < PAGES_PER_RUN && batch.filter((b) => b.chain === 'pt-continente').length < 2) batch.push(state.queue.shift());
+    for (let i = 0; i < state.queue.length && batch.length < PAGES_PER_RUN; ) {
+      const heavy = state.queue[i].chain === 'pt-continente';
+      const n = batch.filter((b) => (b.chain === 'pt-continente') === heavy).length;
+      if (n < (heavy ? 2 : PAGES_PER_RUN - 2)) batch.push(...state.queue.splice(i, 1));
+      else i++;
+    }
     state.current = { prices: true, startedAt: now.getTime() };
     await kv.put('scrape:state', JSON.stringify(state));
     for (const { chain, id, url } of batch) {
@@ -437,20 +460,16 @@ export async function runScraper(env, now = new Date()) {
     }
     state.current = null;
     if (state.queue.length) {
+      // Prix publiés au fil du relevé (toutes les 30 pages environ), sans attendre la fin.
+      state.unpublished = (state.unpublished ?? 0) + batch.length;
+      if (state.unpublished >= 30) {
+        await publishPrices(kv, state.results, week, now, false);
+        state.unpublished = 0;
+      }
       await kv.put('scrape:state', JSON.stringify(state));
       return `prix : ${batch.length} pages lues, ${state.queue.length} restantes`;
     }
-    // Synthèse : médiane par enseigne et par ingrédient.
-    const chains = {};
-    for (const [chain, byId] of Object.entries(state.results)) {
-      chains[chain] = {};
-      for (const [id, values] of Object.entries(byId)) chains[chain][id] = { perKg: Math.round(median(values) * 100) / 100, n: values.length, min: Math.min(...values) };
-    }
-    const previous = await getJson(kv, 'chain-prices:PT', { chains: {} });
-    // Un produit non relevé cette semaine garde son prix précédent (marqué ancien).
-    for (const [chain, byId] of Object.entries(previous.chains ?? {})) for (const [id, p] of Object.entries(byId)) if (!chains[chain]?.[id]) (chains[chain] ??= {})[id] = { ...p, stale: true };
-    await kv.put('chain-prices:PT', JSON.stringify({ updatedAt: now.toISOString(), week, chains, source: 'Sites des enseignes (pages produit publiques)' }));
-    await kv.put('chain-history:PT', JSON.stringify(appendHistory(await getJson(kv, 'chain-history:PT', { series: {} }), week, chains)));
+    await publishPrices(kv, state.results, week, now, true);
     Object.assign(state, { phase: 'done', queue: undefined, results: undefined });
     await kv.put('scrape:state', JSON.stringify(state));
     return 'prix enregistrés';

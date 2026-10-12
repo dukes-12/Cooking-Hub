@@ -484,6 +484,33 @@ describe('relevé des prix des enseignes portugaises', () => {
       globalThis.fetch = orig;
     }
   });
+
+  it('mélange les enseignes dans un passage et publie un relevé inachevé en fin de semaine', async () => {
+    const { runScraper } = await import('../worker/scraper.js');
+    const store = new Map<string, string>();
+    const kv = { get: async (k: string, t?: string) => (store.has(k) ? (t === 'json' ? JSON.parse(store.get(k)!) : store.get(k)) : null), put: async (k: string, v: string) => void store.set(k, v), delete: async (k: string) => void store.delete(k) };
+    const q = (chain: string, n: number) => Array.from({ length: n }, (_, i) => ({ chain, id: 'riz', url: `https://x/${chain}/${i}` }));
+    store.set('scrape:tracked', JSON.stringify({ at: Date.parse('2026-10-10T00:00:00Z'), chains: {} }));
+    store.set('scrape:state', JSON.stringify({ week: '2026-W42', phase: 'prices', queue: [...q('pt-continente', 5), ...q('pt-auchan', 5)], results: { 'pt-auchan': { riz: [1.5, 1.7] } }, log: [] }));
+    const orig = globalThis.fetch;
+    const seen: string[] = [];
+    globalThis.fetch = (async (url: string) => (seen.push(url), new Response('<div class="ct-pdp--prices">1,20&euro;/kg</div>'))) as typeof fetch;
+    try {
+      const env = { PRICES: kv };
+      await runScraper(env, new Date('2026-10-14T08:00:00Z'));
+      expect(seen.filter((u) => u.includes('continente'))).toHaveLength(2);
+      expect(seen.filter((u) => u.includes('auchan'))).toHaveLength(4);
+      // Semaine suivante : le relevé inachevé est publié, pas perdu.
+      expect(store.has('chain-prices:PT')).toBe(false);
+      await runScraper(env, new Date('2026-10-19T08:00:00Z'));
+      const pub = JSON.parse(store.get('chain-prices:PT')!);
+      expect(pub.week).toBe('2026-W42');
+      expect(pub.chains['pt-continente'].riz.perKg).toBe(1.2);
+      expect(pub.chains['pt-auchan'].riz.n).toBe(6);
+    } finally {
+      globalThis.fetch = orig;
+    }
+  });
 });
 
 describe('prix en ligne des enseignes', () => {
