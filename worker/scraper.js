@@ -284,6 +284,12 @@ async function diagnose(kv, urls) {
         out.push({ url, range: entry.range, status: res.status, acceptRanges: res.headers.get('accept-ranges'), contentRange: res.headers.get('content-range'), bytes: text.length, head: text.slice(0, 200), ms: Date.now() - t0 });
         continue;
       }
+      if (entry.grep) {
+        // Lignes contenant un motif (ex. « sitemap » dans un long robots.txt).
+        const re = new RegExp(entry.grep, 'i');
+        out.push({ url, status: res.status, bytes: text.length, lines: text.split('\n').filter((l) => re.test(l)).slice(0, 40), ms: Date.now() - t0 });
+        continue;
+      }
       const recipe = /<html/i.test(text) ? extractRecipe(text) : null;
       out.push({ url, status: res.status, final: res.url, bytes: text.length, ms: Date.now() - t0, recipe: recipe ? { name: recipe.name, ingredients: (recipe.recipeIngredient ?? []).length, steps: Array.isArray(recipe.recipeInstructions) ? recipe.recipeInstructions.length : typeof recipe.recipeInstructions, time: recipe.totalTime, yield: recipe.recipeYield, cuisine: recipe.recipeCuisine } : null, locs: [...text.matchAll(/<loc>([^<]+)<\/loc>/g)].slice(0, 6).map((m) => m[1]), text: /<html/i.test(text) ? '' : text.slice(0, 1500) });
     } catch (e) {
