@@ -3,8 +3,8 @@ import { SEED_RECIPES } from './data/recipes';
 import { getIngredient, setCustomIngredients } from './data/ingredients';
 import { getChain } from './data/reference';
 import { labelKey } from './lib/custom';
-import { fromHarvestedRecipe } from './lib/importer';
 import { useLexiconReady } from './lib/lexicon';
+import { fromHarvestedRecipe, mergeDuplicates } from './lib/importer';
 import { addToFridge, dateIn, defaultShelfDays, presenceOnly } from './lib/pantry';
 import type { AppState, ChosenStore, FridgeItem, Ingredient, PlannedMeal, Profile, Receipt, ReceiptLine, Recipe, ShoppingItem } from './types';
 import { observationsFromReceipts } from './lib/receipts';
@@ -89,7 +89,10 @@ function useStore() {
   }, []);
 
   const recipes = useMemo<Record<string, Recipe>>(
-    () => Object.fromEntries([...SEED_RECIPES, ...catalog, ...web, ...state.imported].map((r) => [r.id, r])),
+    () =>
+      Object.fromEntries(
+        [...SEED_RECIPES, ...catalog.map(merged), ...web, ...state.imported.map(merged)].map((r) => [r.id, r]),
+      ),
     [catalog, web, state.imported],
   );
 
@@ -234,6 +237,9 @@ function consume(fridge: FridgeItem[], used: { ingredientId: string; qty: number
     })
     .filter((f) => f.qty > 0.01);
 }
+
+/** Ingrédients cités plusieurs fois réunis (recettes importées avant cette règle). */
+const merged = (r: Recipe): Recipe => ({ ...r, ingredients: mergeDuplicates(r.ingredients) });
 
 type Store = ReturnType<typeof useStore>;
 const Ctx = createContext<Store | null>(null);

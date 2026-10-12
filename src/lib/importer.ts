@@ -4,6 +4,7 @@ import { cuisineFromText } from '../data/reference';
 import { findInTextDetailed, ingredientFromEntry } from './lexicon';
 import type { Category, Equipment, Recipe, RecipeIngredient, Unit } from '../types';
 import { normalize, uid } from './text';
+import { toGrams } from './units';
 
 // ---------- Reconnaissance des ingrédients ----------
 
@@ -202,6 +203,34 @@ export const guessEquipment = (all: string): Equipment[] => detectEquipment(all)
 /** Plats qui se cuisent au four, pour les recettes dont on n'a pas le texte des étapes. */
 const OVEN_DISHES = /gateau|g[aâ]teau|coulant|fondant|brownie|cookie|muffin|cake\b|tarte|quiche|gratin|clafoutis|cheesecake|madeleine|financier|souffle|lasagn|pizza|roti\b|au four|bolo\b|assad|empad|pao de|folar|pastel de nata|gratinad/;
 
+/**
+ * Un même ingrédient cité plusieurs fois (pour la sauce, pour l'assaisonnement…) n'apparaît qu'une fois :
+ * quantités additionnées (même unité, sinon converties en grammes), notes réunies.
+ */
+export function mergeDuplicates(list: RecipeIngredient[]): RecipeIngredient[] {
+  const out: RecipeIngredient[] = [];
+  for (const it of list) {
+    const prev = it.ingredientId ? out.find((o) => o.ingredientId === it.ingredientId) : undefined;
+    if (!prev) {
+      out.push({ ...it });
+      continue;
+    }
+    if (prev.qty == null) Object.assign(prev, { qty: it.qty, unit: it.unit });
+    else if (it.qty != null) {
+      if (prev.unit === it.unit) prev.qty += it.qty;
+      else {
+        const ing = getIngredient(it.ingredientId!);
+        const a = toGrams(ing, prev.qty, prev.unit);
+        const b = toGrams(ing, it.qty, it.unit);
+        if (a != null && b != null) Object.assign(prev, { qty: Math.round((a + b) * 10) / 10, unit: 'g' as Unit });
+      }
+    }
+    prev.optional = prev.optional && it.optional;
+    if (it.note && it.note !== prev.note) prev.note = [prev.note, it.note].filter(Boolean).join(' · ');
+  }
+  return out;
+}
+
 export function fromSchemaRecipe(r: Record<string, unknown>, url?: string, siteName?: string): Recipe {
   const title = decode(text(r.name)) || 'Recette importée';
   const ingredientsRaw = (Array.isArray(r.recipeIngredient) ? r.recipeIngredient : Array.isArray(r.ingredients) ? r.ingredients : [])
@@ -237,7 +266,7 @@ export function fromSchemaRecipe(r: Record<string, unknown>, url?: string, siteN
       const d = detectEquipment([title, ...stepList].join('\n'));
       return { equipment: d.equipment, ...(Object.keys(d.alternatives).length ? { equipmentAlt: d.alternatives } : {}) };
     })(),
-    ingredients: ingredientsRaw.map(parseIngredientLine),
+    ingredients: mergeDuplicates(ingredientsRaw.map(parseIngredientLine)),
     steps: stepList,
     source: { name: siteName ?? (url ? new URL(url).hostname.replace(/^www\./, '') : 'Import'), url },
     sourceKcal: Number.isFinite(kcal) && kcal > 0 ? Math.round(kcal) : undefined,

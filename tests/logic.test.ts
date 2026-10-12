@@ -744,3 +744,15 @@ describe('ingrédients ajoutés', () => {
     expect(id('1 pincée de noix de muscade')).toBe('muscade');
   });
 });
+
+describe('ingrédients en double', () => {
+  it('réunit un ingrédient cité plusieurs fois', async () => {
+    const { mergeDuplicates } = await import('../src/lib/importer');
+    const m = mergeDuplicates(["huile d'olive", "1 c. à soupe d'huile d'olive", 'poivre', 'poivre', '2 c. à soupe de sauce soja', '1 c. à soupe de sauce soja', '100 g de beurre', '20 cl de crème'].map(parseIngredientLine));
+    expect(m.filter((l) => l.ingredientId === 'huile-olive')).toHaveLength(1);
+    expect(m.find((l) => l.ingredientId === 'huile-olive')).toMatchObject({ qty: 1, unit: 'cas' });
+    expect(m.filter((l) => l.ingredientId === 'poivre')).toHaveLength(1);
+    expect(m.find((l) => l.ingredientId === 'sauce-soja')).toMatchObject({ qty: 3, unit: 'cas' });
+    expect(m).toHaveLength(5);
+  });
+});
