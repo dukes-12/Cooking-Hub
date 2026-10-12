@@ -1,5 +1,6 @@
 import { getIngredient } from '../data/ingredients';
 import { ALLERGENS, DIETS, EQUIPMENT, EQUIPMENT_ALTERNATIVES, SPEEDS } from '../data/reference';
+import { isSoon, presenceOnly } from './pantry';
 import type { Equipment, FoodTag, FridgeItem, Ingredient, Profile, Recipe, RecipeIngredient } from '../types';
 import { costOf, quoteBasket, type BasketQuote } from './pricing';
 import { baseToGrams, gramsToBase, toGrams } from './units';
@@ -58,6 +59,8 @@ export interface Adapted {
   costPerServing: number | null;
   /** Ingrédients nécessaires (hors placard/optionnels) déjà présents : 0..1 */
   fridgeCoverage: number;
+  /** Produits du frigo bientôt périmés que la recette utilise. */
+  expiring: string[];
   missingCount: number;
   liked: string[];
   disliked: string[];
@@ -151,7 +154,8 @@ export function adaptRecipe(
       if (ing.staple && profile.pantryBasics) fridgeStatus = 'staple';
       else {
         have = fridgeQty(fridge, ing.id);
-        if (have > 0 && (baseQty == null || have >= baseQty * 0.95)) fridgeStatus = 'full';
+        // Épices, huiles… : on en a ou pas, sans quantité.
+        if (have > 0 && (presenceOnly(ing) || baseQty == null || have >= baseQty * 0.95)) fridgeStatus = 'full';
         else if (have > 0) fridgeStatus = 'partial';
         else {
           fridgeSwap = compatibleSubs(ing, profile, excluded).find((s) => fridgeQty(fridge, s.id) > 0);
@@ -215,12 +219,14 @@ export function adaptRecipe(
   const have = needed.filter((l) => l.fridge === 'full').length + needed.filter((l) => l.fridge === 'partial').length * 0.5;
   const fridgeCoverage = needed.length ? have / needed.length : 0;
   const missingCount = needed.filter((l) => l.fridge === 'none' && !l.fridgeSwap).length;
+  const soon = new Set(fridge.filter((f) => isSoon(f)).map((f) => f.ingredientId));
+  const expiring = [...new Set(active.filter((l) => l.ingredient && soon.has(l.ingredient.id) && !presenceOnly(l.ingredient)).map((l) => l.ingredient!.name))];
 
   const totalMin = recipe.prepMin == null && recipe.cookMin == null ? null : (recipe.prepMin ?? 0) + (recipe.cookMin ?? 0);
 
   return {
     recipe, servings, lines, equipment, status, issues, totalMin, nutrition, quote, costPerServing,
-    fridgeCoverage, missingCount, liked: [...liked], disliked: [...disliked],
+    fridgeCoverage, expiring, missingCount, liked: [...liked], disliked: [...disliked],
   };
 }
 
@@ -278,6 +284,11 @@ export function scoreRecipe(a: Adapted, profile: Profile): Match {
   }
 
   score += a.fridgeCoverage * 25;
+  // Anti-gaspi : ce qui va périmer passe en premier.
+  if (a.expiring.length) {
+    score += 12 * Math.min(3, a.expiring.length);
+    reasons.unshift(`⏰ Utilise ${a.expiring.slice(0, 2).join(', ')} avant péremption`);
+  }
   if (a.fridgeCoverage >= 0.5) reasons.push(`🧊 ${Math.round(a.fridgeCoverage * 100)} % dans ton frigo`);
   if (a.status === 'adapted') score -= 4;
   if (a.status === 'incompatible') score -= 60;

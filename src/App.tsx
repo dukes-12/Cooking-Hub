@@ -1,3 +1,5 @@
+import { BurstScan } from './screens/BurstScan';
+import { CookMode } from './screens/CookMode';
 import { Discover } from './screens/Discover';
 import { Fridge } from './screens/Fridge';
 import { Import } from './screens/Import';
@@ -56,6 +58,8 @@ export function App() {
     case 'shopping': screen = <Shopping />; break;
     case 'shop-mode': screen = <ShopMode />; break;
     case 'recipe': screen = <RecipeDetail key={param} id={param} />; break;
+    case 'cook': screen = <CookMode key={param} id={param ?? ''} />; break;
+    case 'scan': screen = <BurstScan />; break;
     case 'profile': screen = <Profile />; break;
     case 'import': screen = <Import />; break;
     case 'stores': screen = <Stores />; break;
@@ -65,7 +69,7 @@ export function App() {
     case 'receipt': screen = <ReceiptImport key={param} storeKey={param} />; break;
     default: screen = <Discover />;
   }
-  const showTabs = !['recipe', 'shop-mode', 'import', 'receipt', 'product'].includes(page);
+  const showTabs = !['recipe', 'cook', 'scan', 'shop-mode', 'import', 'receipt', 'product'].includes(page);
   const pendingShopping = state.shopping.filter((i) => !i.checked).length;
 
   return (

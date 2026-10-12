@@ -1,3 +1,4 @@
+import { CookedSheet } from '../components/CookedSheet';
 import { useChainPrices } from '../lib/chainprices';
 import { useEffect, useMemo, useState } from 'react';
 import { importFromUrl } from '../lib/importer';
@@ -37,6 +38,7 @@ export function RecipeView({ recipe, preview, onSave }: { recipe: Recipe; previe
   const [swapLine, setSwapLine] = useState<AdaptedLine | null>(null);
   const [doneSteps, setDoneSteps] = useState<number[]>([]);
   const [cooked, setCooked] = useState(false);
+  const [cookedSheet, setCookedSheet] = useState(false);
 
   const community = useCommunityPrices() + useChainPrices();
   useEffect(() => {
@@ -49,14 +51,6 @@ export function RecipeView({ recipe, preview, onSave }: { recipe: Recipe; previe
   const toBuy = best ? missingCost(a, best.chain.id, country) : null;
   const n = a.nutrition;
   const macroTotal = n.protein * 4 + n.carbs * 4 + n.fat * 9 || 1;
-
-  const cook = () => {
-    const used = a.lines
-      .filter((l) => !l.removed && l.ingredient && l.baseQty != null && (l.fridge === 'full' || l.fridge === 'partial'))
-      .map((l) => ({ ingredientId: l.ingredient!.id, qty: Math.min(l.baseQty!, l.fridgeHave) }));
-    actions.markCooked(recipe.id, used);
-    setCooked(true);
-  };
 
   return (
     <div className="screen recipe">
@@ -177,6 +171,7 @@ export function RecipeView({ recipe, preview, onSave }: { recipe: Recipe; previe
             </li>
           ))}
         </ol>
+        {!preview && !cooked && <button className="btn btn-ghost btn-block" onClick={() => setCookedSheet(true)}>✓ J’ai cuisiné cette recette (mettre le frigo à jour)</button>}
         {recipe.source?.url && recipe.steps.length > 0 && (
           <p className="small"><a href={recipe.source.url} target="_blank" rel="noreferrer">Voir la recette originale sur {recipe.source.name} ↗</a></p>
         )}
@@ -190,9 +185,7 @@ export function RecipeView({ recipe, preview, onSave }: { recipe: Recipe; previe
           <button className="btn btn-soft grow" onClick={() => go('/fridge')}>✅ Frigo mis à jour · voir</button>
         ) : (
           <>
-            {planned ? (
-              <button className="btn btn-soft" onClick={cook}>👩‍🍳 J’ai cuisiné</button>
-            ) : null}
+            <button className="btn btn-soft" onClick={() => go(`/cook/${recipe.id}`)}>👩‍🍳 Cuisiner</button>
             <button
               className="btn btn-primary grow"
               onClick={() => {
@@ -206,6 +199,8 @@ export function RecipeView({ recipe, preview, onSave }: { recipe: Recipe; previe
           </>
         )}
       </div>
+
+      <CookedSheet adapted={a} open={cookedSheet} onClose={() => setCookedSheet(false)} onDone={() => { setCookedSheet(false); setCooked(true); }} />
 
       <Sheet open={!!swapLine} onClose={() => setSwapLine(null)} title={`Remplacer ${swapLine?.ingredient?.name ?? ''}`}>
         <div className="list">

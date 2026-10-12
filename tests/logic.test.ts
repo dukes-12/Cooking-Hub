@@ -693,3 +693,40 @@ describe('lecture partielle des pages produit', () => {
     }
   });
 });
+
+describe('frigo : placard, péremption et cuisine', () => {
+  it('épices et huiles : on en a ou pas, sans quantité', async () => {
+    const { addToFridge, presenceOnly } = await import('../src/lib/pantry');
+    expect(presenceOnly(getIngredient('cumin'))).toBe(true);
+    expect(presenceOnly(getIngredient('huile-olive'))).toBe(true);
+    expect(presenceOnly(getIngredient('poulet'))).toBe(false);
+    let f = addToFridge([], getIngredient('cumin'), 'cumin', 40);
+    f = addToFridge(f, getIngredient('cumin'), 'cumin', 40);
+    expect(f).toMatchObject([{ ingredientId: 'cumin', qty: 1 }]);
+  });
+
+  it('dates de péremption et recettes anti-gaspi', async () => {
+    const { daysLeft, expiryLabel, isSoon, dateIn } = await import('../src/lib/pantry');
+    const now = new Date(2026, 9, 12);
+    expect(daysLeft({ expiresOn: '2026-10-14' }, now)).toBe(2);
+    expect(expiryLabel({ expiresOn: '2026-10-11' }, now)).toBe('périmé depuis 1 j');
+    expect(isSoon({ expiresOn: '2026-10-20' }, now)).toBe(false);
+    expect(dateIn(3, now)).toBe('2026-10-15');
+    const { adaptRecipe, scoreRecipe } = await import('../src/lib/adapt');
+    const r = SEED_RECIPES.find((x) => x.ingredients.some((i) => i.ingredientId === 'courgette'))!;
+    const p = { ...DEFAULT_PROFILE, equipment: ['stovetop', 'oven'] as Profile['equipment'] };
+    const fresh = adaptRecipe(r, p, [{ ingredientId: 'courgette', qty: 500, addedAt: 0, expiresOn: dateIn(30) }]);
+    const soon = adaptRecipe(r, p, [{ ingredientId: 'courgette', qty: 500, addedAt: 0, expiresOn: dateIn(1) }]);
+    expect(fresh.expiring).toEqual([]);
+    expect(soon.expiring).toEqual(['Courgette']);
+    expect(scoreRecipe(soon, p).score).toBeGreaterThan(scoreRecipe(fresh, p).score);
+  });
+
+  it('minuteurs lus dans les étapes', async () => {
+    const { stepDurations } = await import('../src/screens/CookMode');
+    expect(stepDurations('Enfourner 8 à 10 min jusqu’à ce que ce soit doré.')).toEqual([10]);
+    expect(stepDurations('Laisser mijoter 1 h 30 puis reposer 15 minutes')).toEqual([90, 15]);
+    expect(stepDurations('Cozinhe durante 20 minutos.')).toEqual([20]);
+    expect(stepDurations('Couper en 4 morceaux.')).toEqual([]);
+  });
+});

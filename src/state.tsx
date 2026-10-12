@@ -5,7 +5,8 @@ import { getChain } from './data/reference';
 import { labelKey } from './lib/custom';
 import { fromHarvestedRecipe } from './lib/importer';
 import { useLexiconReady } from './lib/lexicon';
-import type { AppState, ChosenStore, FridgeItem, Ingredient, PlannedMeal, Profile, Receipt, Recipe, ShoppingItem } from './types';
+import { addToFridge, dateIn, defaultShelfDays, presenceOnly } from './lib/pantry';
+import type { AppState, ChosenStore, FridgeItem, Ingredient, PlannedMeal, Profile, Receipt, ReceiptLine, Recipe, ShoppingItem } from './types';
 import { observationsFromReceipts } from './lib/receipts';
 import { setObservedPrices } from './lib/pricing';
 import { storeKey } from './lib/stores';
@@ -129,12 +130,10 @@ function useStore() {
           fridge: consume(s.fridge, used),
         })),
 
-      addFridge: (ingredientId: string, qty: number) =>
-        patch((s) => ({
-          fridge: s.fridge.some((f) => f.ingredientId === ingredientId)
-            ? s.fridge.map((f) => (f.ingredientId === ingredientId ? { ...f, qty: f.qty + qty } : f))
-            : [{ ingredientId, qty, addedAt: Date.now() }, ...s.fridge],
-        })),
+      addFridge: (ingredientId: string, qty: number, expiresOn?: string) =>
+        patch((s) => ({ fridge: addToFridge(s.fridge, getIngredient(ingredientId), ingredientId, qty, expiresOn) })),
+      setFridgeExpiry: (ingredientId: string, expiresOn: string | undefined) =>
+        patch((s) => ({ fridge: s.fridge.map((f) => (f.ingredientId === ingredientId ? { ...f, expiresOn } : f)) })),
       setFridgeQty: (ingredientId: string, qty: number) =>
         patch((s) => ({
           fridge: qty <= 0 ? s.fridge.filter((f) => f.ingredientId !== ingredientId) : s.fridge.map((f) => (f.ingredientId === ingredientId ? { ...f, qty } : f)),
@@ -154,11 +153,8 @@ function useStore() {
           let fridge = s.fridge;
           for (const it of s.shopping.filter((i) => i.checked && i.ingredientId && i.qty != null)) {
             const ing = getIngredient(it.ingredientId)!;
-            if (ing.staple) continue;
-            const existing = fridge.find((f) => f.ingredientId === ing.id);
-            fridge = existing
-              ? fridge.map((f) => (f.ingredientId === ing.id ? { ...f, qty: f.qty + it.qty! } : f))
-              : [{ ingredientId: ing.id, qty: it.qty!, addedAt: Date.now() }, ...fridge];
+            const shelf = defaultShelfDays(ing);
+            fridge = addToFridge(fridge, ing, ing.id, it.qty!, shelf ? dateIn(shelf) : undefined);
           }
           return { fridge, shopping: s.shopping.filter((i) => !i.checked) };
         }),
@@ -175,9 +171,9 @@ function useStore() {
           let fridge = s.fridge;
           for (const { ingredientId, qty } of toFridge) {
             if (!(qty > 0)) continue;
-            fridge = fridge.some((f) => f.ingredientId === ingredientId)
-              ? fridge.map((f) => (f.ingredientId === ingredientId ? { ...f, qty: f.qty + qty } : f))
-              : [{ ingredientId, qty, addedAt: Date.now() }, ...fridge];
+            const ing = getIngredient(ingredientId);
+            const shelf = ing ? defaultShelfDays(ing) : null;
+            fridge = addToFridge(fridge, ing, ingredientId, qty, shelf ? dateIn(shelf) : undefined);
           }
           const stores = newStore && !s.profile.stores.some((x) => storeKey(x) === storeKey(newStore)) ? [...s.profile.stores, newStore] : s.profile.stores;
           // L'appli retient l'article choisi pour chaque libellé : le prochain ticket le reconnaîtra tout seul.
@@ -190,6 +186,11 @@ function useStore() {
             labelMemory,
           };
         }),
+      /** Relevé en rafale : un prix de plus sur le même ticket de relevé. */
+      appendReceiptLine: (receiptId: string, line: ReceiptLine) =>
+        patch((s) => ({
+          receipts: s.receipts.map((r) => (r.id === receiptId ? { ...r, lines: [...r.lines, line], total: Math.round(((r.total ?? 0) + line.totalPrice) * 100) / 100 } : r)),
+        })),
       addCustomProduct: (ing: Ingredient) => patch((s) => ({ customProducts: [...s.customProducts.filter((x) => x.id !== ing.id), ing] })),
       updateCustomProduct: (id: string, patchIng: Partial<Ingredient>) =>
         patch((s) => ({ customProducts: s.customProducts.map((x) => (x.id === id ? { ...x, ...patchIng, id } : x)) })),
@@ -226,6 +227,8 @@ function useStore() {
 function consume(fridge: FridgeItem[], used: { ingredientId: string; qty: number }[]): FridgeItem[] {
   return fridge
     .map((f) => {
+      // Épices, huiles, sauces… : on en a toujours après avoir cuisiné.
+      if (presenceOnly(getIngredient(f.ingredientId))) return f;
       const u = used.filter((x) => x.ingredientId === f.ingredientId).reduce((s, x) => s + x.qty, 0);
       return u ? { ...f, qty: f.qty - u } : f;
     })

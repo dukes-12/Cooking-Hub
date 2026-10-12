@@ -225,8 +225,10 @@ export interface Profile {
 
 export interface FridgeItem {
   ingredientId: string;
-  qty: number; // dans l'unité naturelle de l'ingrédient
+  qty: number; // dans l'unité naturelle de l'ingrédient (1 = « j'en ai » pour les épices, huiles…)
   addedAt: number;
+  /** Date de péremption (AAAA-MM-JJ). */
+  expiresOn?: string;
 }
 
 export interface ShoppingItem {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { getIngredient } from '../data/ingredients';
 import { customByBarcode, makeCustomProduct } from '../lib/custom';
+import { go } from '../router';
 import { useApp } from '../state';
 import { PriceForm } from './ExactPrices';
 import { useMyPhoto } from '../lib/photoStore';
@@ -28,7 +29,7 @@ export function packQuantity(p: OffProduct, ing: Ingredient): number {
 const myPackQuantity = (ing: Ingredient) => ing.packQty ?? (ing.unit === 'pc' ? 1 : Math.round(gramsToBase(ing, 250)));
 
 /** Fiche de mon produit tirée d'Open Food Facts (nom, marque, paquet, nutrition), rattachée à l'aliment reconnu. */
-function offDraft(p: OffProduct, familyId?: string): Ingredient {
+export function offDraft(p: OffProduct, familyId?: string): Ingredient {
   const u = p.qtyUnit?.toLowerCase();
   const unit = u === 'ml' || u === 'l' || u === 'cl' ? 'ml' : 'g';
   const name = [p.name || 'Produit', p.brands.split(',')[0]].filter(Boolean).join(' ');
@@ -175,6 +176,7 @@ export function BarcodeSheet({ open, onClose, onAdd, onOpenProduct }: { open: bo
           {scanning && <video ref={video} className="scan-video" playsInline muted />}
           {canScan && !scanning && <button className="btn btn-primary btn-block" onClick={() => setScanning(true)}>📷 Scanner le code-barres</button>}
           {scanning && <button className="btn btn-ghost btn-block" onClick={() => setScanning(false)}>Arrêter la caméra</button>}
+          {!scanning && <button className="btn btn-soft btn-block" onClick={() => { close(); go('/scan'); }}>⚡ Scan en rafale (relever plusieurs prix)</button>}
           <label className="btn btn-soft btn-block">
             🖼️ Photo du code-barres
             <input
