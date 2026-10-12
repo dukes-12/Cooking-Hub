@@ -119,7 +119,8 @@ export async function runRecipes(env, now = new Date()) {
   let msg = 'recettes : rien à faire cette semaine';
 
   try {
-    if (index.count && index.equipV !== EQUIPMENT_VERSION) {
+    // Relecture des recettes déjà récoltées (version de détection plus récente) : après la récolte de la semaine.
+    if (index.count && index.equipV !== EQUIPMENT_VERSION && state.phase === 'done') {
       // Recettes récoltées avant la détection des appareils : on relit leur page (5 par passage).
       let todo = PAGES_PER_RUN;
       for (let n = 0; n < index.chunks && todo > 0; n++) {
