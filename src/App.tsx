@@ -2,6 +2,7 @@ import { QuickAdd } from './components/QuickAdd';
 import { ToastHost } from './components/ToastHost';
 import { BurstScan } from './screens/BurstScan';
 import { CookMode } from './screens/CookMode';
+import { Savings } from './screens/Savings';
 import { Discover } from './screens/Discover';
 import { Fridge } from './screens/Fridge';
 import { Import } from './screens/Import';
@@ -63,6 +64,7 @@ export function App() {
     case 'recipe': screen = <RecipeDetail key={param} id={param} />; break;
     case 'cook': screen = <CookMode key={param} id={param ?? ''} />; break;
     case 'scan': screen = <BurstScan />; break;
+    case 'savings': screen = <Savings />; break;
     case 'profile': screen = <Profile />; break;
     case 'import': screen = <Import />; break;
     case 'stores': screen = <Stores />; break;

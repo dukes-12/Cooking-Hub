@@ -495,3 +495,20 @@ div.ticket > .ticket-line, .off-item, .stats div, .cook-ings, .cook-timer, .tabl
 .toast-undo { width: calc(100% - 32px); max-width: 520px; border-radius: 16px; padding: 0.75rem 1rem; }
 .site-products { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.8rem; }
 a.price-row { color: inherit; text-decoration: none; }
+.today-card.good b { color: var(--good); }
+.week-plan { display: flex; flex-direction: column; gap: 0.7rem; }
+.plan-day { background: var(--surface); border: 1px solid var(--card-border); border-radius: 16px; box-shadow: var(--shadow); padding: 0.6rem 0.8rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.plan-day.is-today { border: 1.5px solid var(--primary); }
+.plan-day.is-past { opacity: 0.6; }
+.plan-day-head { display: flex; align-items: baseline; gap: 0.5rem; text-transform: capitalize; }
+.plan-slot { display: flex; align-items: flex-start; gap: 0.6rem; min-height: 1.8rem; }
+.plan-slot-label { width: 2.6rem; flex: none; padding-top: 0.35rem; }
+.plan-meal { display: flex; align-items: center; gap: 0.4rem; }
+.plan-meal-main, .plan-pick { display: flex; align-items: center; gap: 0.6rem; flex: 1; background: none; border: 0; padding: 0.2rem 0; text-align: left; color: inherit; font: inherit; }
+.plan-pick { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 0.5rem 0.7rem; }
+.plan-meal .visual, .plan-pick .visual { width: 40px; height: 40px; flex: none; border-radius: 10px; font-size: 1.3rem; }
+.unplaced { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.5rem; }
+.savings-hero { display: flex; flex-direction: column; gap: 0.4rem; }
+.savings-big { font-size: 2.2rem; font-weight: 800; color: var(--good); letter-spacing: -0.02em; }
+.savings-split { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+.savings-split > div { display: flex; flex-direction: column; background: var(--surface-2); border-radius: 12px; padding: 0.5rem 0.6rem; }

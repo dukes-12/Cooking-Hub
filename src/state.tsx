@@ -6,8 +6,10 @@ import { labelKey } from './lib/custom';
 import { useLexiconReady } from './lib/lexicon';
 import { fromHarvestedRecipe, mergeDuplicates } from './lib/importer';
 import { sameFood } from './lib/canonical';
-import { addToFridge, dateIn, defaultShelfDays, presenceOnly } from './lib/pantry';
-import type { AppState, ChosenStore, FridgeItem, FridgeLocation, Ingredient, PlannedMeal, Profile, Receipt, ReceiptLine, Recipe, ShoppingItem } from './types';
+import { addToFridge, dateIn, defaultShelfDays, isSoon, presenceOnly } from './lib/pantry';
+import { costOf } from './lib/pricing';
+import { baseToGrams } from './lib/units';
+import type { AppState, ChosenStore, FridgeItem, FridgeLocation, MealSlot, SavedFood, Ingredient, PlannedMeal, Profile, Receipt, ReceiptLine, Recipe, ShoppingItem } from './types';
 import { observationsFromReceipts } from './lib/receipts';
 import { setObservedPrices } from './lib/pricing';
 import { storeKey } from './lib/stores';
@@ -118,12 +120,15 @@ function useStore() {
       pass: (id: string) => patch((s) => ({ passed: [...s.passed, id] })),
       resetSwipes: () => patch(() => ({ passed: [] })),
 
-      addToMenu: (recipeId: string, servings: number) =>
+      addToMenu: (recipeId: string, servings: number, day?: string, slot?: MealSlot) =>
         patch((s) => ({
           menu: s.menu.some((m) => m.recipeId === recipeId)
-            ? s.menu.map((m) => (m.recipeId === recipeId ? { ...m, servings } : m))
-            : [...s.menu, { recipeId, servings }],
+            ? s.menu.map((m) => (m.recipeId === recipeId ? { ...m, servings, ...(day ? { day, slot: slot ?? m.slot ?? 'soir' } : {}) } : m))
+            : [...s.menu, { recipeId, servings, ...(day ? { day, slot: slot ?? 'soir' } : {}) }],
         })),
+      /** Place un repas du menu un jour donné (ou le remet « à placer »). */
+      planMeal: (recipeId: string, day: string | undefined, slot: MealSlot = 'soir') =>
+        patch((s) => ({ menu: s.menu.map((m) => (m.recipeId === recipeId ? (day ? { ...m, day, slot } : { recipeId: m.recipeId, servings: m.servings }) : m)) })),
       removeFromMenu: (recipeId: string) => patch((s) => ({ menu: s.menu.filter((m) => m.recipeId !== recipeId) })),
       setMenuServings: (recipeId: string, servings: number) =>
         patch((s) => ({ menu: s.menu.map((m: PlannedMeal) => (m.recipeId === recipeId ? { ...m, servings } : m)) })),
@@ -132,6 +137,7 @@ function useStore() {
         patch((s) => ({
           menu: s.menu.filter((m) => m.recipeId !== recipeId),
           fridge: consume(s.fridge, used),
+          savedFood: [...(s.savedFood ?? []), ...savedFromWaste(s.fridge, used, s.profile.country)].slice(-500),
         })),
 
       addFridge: (ingredientId: string, qty: number, expiresOn?: string) =>
@@ -253,6 +259,20 @@ function consume(fridge: FridgeItem[], used: { ingredientId: string; qty: number
     }
   }
   return left.filter((f) => f.qty > 0.01);
+}
+
+/** Ce que la recette a utilisé parmi les produits bientôt périmés du frigo, avec sa valeur. */
+function savedFromWaste(fridge: FridgeItem[], used: { ingredientId: string; qty: number }[], country: string): SavedFood[] {
+  const today = new Date().toISOString().slice(0, 10);
+  const out: SavedFood[] = [];
+  for (const u of used) {
+    const item = fridge.find((f) => sameFood(f.ingredientId, u.ingredientId) && isSoon(f));
+    const ing = getIngredient(u.ingredientId);
+    if (!item || !ing) continue;
+    const value = costOf(ing.id, baseToGrams(ing, Math.min(u.qty, item.qty)), null, country) ?? 0;
+    out.push({ date: today, ingredientId: ing.id, value: Math.round(value * 100) / 100 });
+  }
+  return out;
 }
 
 /** Ingrédients cités plusieurs fois réunis (recettes importées avant cette règle). */

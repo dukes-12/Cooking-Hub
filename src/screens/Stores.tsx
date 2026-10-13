@@ -38,7 +38,10 @@ export function Stores({ initialTab, section = 'stores' }: { initialTab?: Tab; s
           <p className="small muted">{prices ? 'Comparer les magasins et les produits' : `${state.profile.stores.length} magasin${state.profile.stores.length > 1 ? 's' : ''} · ${state.receipts.length} ticket${state.receipts.length > 1 ? 's' : ''}`}</p>
         </div>
         {prices ? (
-          <button className="btn btn-soft btn-sm" onClick={() => go('/scan')}>⚡ Relevé</button>
+          <div className="row gap-sm">
+            <button className="btn btn-primary btn-sm" onClick={() => go('/savings')}>💰 Économies</button>
+            <button className="btn btn-soft btn-sm" onClick={() => go('/scan')}>⚡ Relevé</button>
+          </div>
         ) : (
           <button className="btn btn-primary btn-sm" onClick={() => go('/receipt')}>🧾 Ajouter un ticket</button>
         )}

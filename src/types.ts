@@ -250,6 +250,19 @@ export interface ShoppingItem {
 export interface PlannedMeal {
   recipeId: string;
   servings: number;
+  /** Jour prévu (AAAA-MM-JJ) et repas ; sans jour : « à placer ». */
+  day?: string;
+  slot?: MealSlot;
+}
+
+export type MealSlot = 'midi' | 'soir';
+
+/** Produit bientôt périmé finalement cuisiné : sauvé de la poubelle. */
+export interface SavedFood {
+  date: string;
+  ingredientId: string;
+  /** Valeur estimée de la quantité sauvée (devise locale). */
+  value: number;
 }
 
 export interface AppState {
@@ -268,4 +281,6 @@ export interface AppState {
   labelMemory: Record<string, string>;
   /** Produits favoris (ajout rapide au frigo, en haut des listes). */
   favoriteProducts?: string[];
+  /** Journal anti-gaspi (produits bientôt périmés utilisés en cuisinant). */
+  savedFood?: SavedFood[];
 }

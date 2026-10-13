@@ -814,3 +814,21 @@ describe('pages produit des enseignes', () => {
     expect(productName('https://www.auchan.pt/pt/alimentacao/arroz-agulha-cigala-1kg/40299.html')).toBe('Arroz agulha cigala 1kg');
   });
 });
+
+describe('économies', () => {
+  it('compare les prix payés aux prix habituels de la communauté', async () => {
+    const { receiptSavings, monthlySavings } = await import('../src/lib/savings');
+    setCommunityPrices('en:chicken-breasts', 'PT', [
+      { perKg: 8, unit: null, currency: 'EUR', date: '2026-09-01', brand: 'Continente', city: '', lat: null, lon: null },
+      { perKg: 8.2, unit: null, currency: 'EUR', date: '2026-09-01', brand: 'Continente', city: '', lat: null, lon: null },
+      { perKg: 7.8, unit: null, currency: 'EUR', date: '2026-09-02', brand: 'Pingo Doce', city: '', lat: null, lon: null },
+    ]);
+    const line = { id: 'l1', label: 'FILETE FRANGO', productId: 'poulet', count: 1, size: null, sizeUnit: 'none' as const, weightKg: 0.5, totalPrice: 3, toFridge: false };
+    const r: Receipt = { id: 'r1', storeKey: 'st', chainId: 'pt-lidl', country: 'PT', date: '2026-10-05', total: 3, createdAt: 0, lines: [line] };
+    const s = receiptSavings([r]);
+    expect(s).toHaveLength(1);
+    expect(s[0].saving).toBeGreaterThan(0.5);
+    const m = monthlySavings([r], [{ date: '2026-10-06', ingredientId: 'courgette', value: 1.2 }]);
+    expect(m[0]).toMatchObject({ month: '2026-10', lines: 1, wasteCount: 1, wasteSaved: 1.2 });
+  });
+});

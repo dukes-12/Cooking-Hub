@@ -6,7 +6,9 @@ import type { Match } from '../lib/adapt';
 import { go } from '../router';
 import { useApp } from '../state';
 import { getIngredient } from '../data/ingredients';
-import { isSoon } from '../lib/pantry';
+import { dateIn, isSoon } from '../lib/pantry';
+import { fmtMoney } from '../lib/pricing';
+import { monthlySavings } from '../lib/savings';
 import type { Category } from '../types';
 
 const FILTERS: (Category | 'all')[] = ['all', 'plat', 'dessert', 'petit-dej', 'soupe', 'salade'];
@@ -208,7 +210,14 @@ function Today() {
   const matches = useMatches();
   const soon = state.fridge.filter((f) => isSoon(f));
   const antiWaste = matches.filter((m) => m.adapted.status !== 'incompatible' && m.adapted.expiring.length > 0).length;
-  const next = state.menu.map((m) => recipes[m.recipeId]).find(Boolean);
+  // Le repas prévu le plus proche (aujourd'hui d'abord), sinon le premier du menu.
+  const todayId = dateIn(0);
+  const planned = [...state.menu].filter((m) => recipes[m.recipeId]).sort((a, b) => (a.day ?? '9999').localeCompare(b.day ?? '9999') || (a.slot === 'midi' ? -1 : 1));
+  const nextMeal = planned.find((m) => !m.day || m.day >= todayId);
+  const next = nextMeal ? recipes[nextMeal.recipeId] : undefined;
+  const month = new Date().toISOString().slice(0, 7);
+  const saved = monthlySavings(state.receipts, state.savedFood).find((m) => m.month === month);
+  const savedTotal = saved ? saved.saving + saved.wasteSaved : 0;
   const toBuy = state.shopping.filter((i) => !i.checked).length;
   return (
     <div className="today scroll-x">
@@ -222,7 +231,12 @@ function Today() {
       <button className="today-card" onClick={() => (next ? go(`/recipe/${next.id}`) : go('/menu'))}>
         <span className="today-emoji">🍽️</span>
         <b>{next ? next.title : 'Rien au menu'}</b>
-        <span className="small muted">{next ? `au menu · ${state.menu.length} repas prévu${state.menu.length > 1 ? 's' : ''}` : 'Choisis tes repas de la semaine'}</span>
+        <span className="small muted">{next ? (nextMeal?.day === todayId ? `ce ${nextMeal.slot === 'midi' ? 'midi' : 'soir'}` : nextMeal?.day ? new Date(`${nextMeal.day}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'long' }) + ` ${nextMeal.slot ?? ''}` : 'au menu, à placer') : 'Planifie ta semaine'}</span>
+      </button>
+      <button className="today-card good" onClick={() => go('/savings')}>
+        <span className="today-emoji">💰</span>
+        <b>{savedTotal > 0 ? `${fmtMoney(savedTotal, state.profile.country)} économisés` : 'Mes économies'}</b>
+        <span className="small muted">{savedTotal > 0 ? 'ce mois-ci' : 'Scanne tes tickets pour les voir'}</span>
       </button>
       <button className="today-card" onClick={() => go('/shopping')}>
         <span className="today-emoji">🛒</span>
