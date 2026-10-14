@@ -36,7 +36,7 @@ export const SOURCES = [
     page: /^https:\/\/jow\.fr\/recipes\/[a-z0-9-]+$/,
   },
 ];
-const PER_SOURCE_PER_WEEK = 40;
+const PER_SOURCE_PER_WEEK = 150;
 const PAGES_PER_RUN = 5;
 const SLICE = 400;
 const MAX_RECIPES = 3000;
@@ -101,10 +101,18 @@ export async function runRecipes(env, now = new Date()) {
   if (state.current && now - state.current < 5 * 60000) return 'recettes : passage précédent en cours';
 
   if (state.week !== week) {
-    Object.assign(state, { week, phase: 'collect', queue: [], exhausted: {}, quota: Object.fromEntries(SOURCES.map((s) => [s.id, PER_SOURCE_PER_WEEK])), tries: 0, current: null });
+    Object.assign(state, { week, phase: 'collect', queue: [], exhausted: {}, quota: Object.fromEntries(SOURCES.map((s) => [s.id, PER_SOURCE_PER_WEEK])), quotaLimit: PER_SOURCE_PER_WEEK, tries: 0, current: null });
     await kv.put('recipes:state', JSON.stringify(state));
     return `recettes : semaine ${week}`;
   }
+  // Quota hebdomadaire relevé en cours de semaine : chaque source reçoit la différence et la récolte reprend.
+  if ((state.quotaLimit ?? 40) < PER_SOURCE_PER_WEEK && state.quota) {
+    const extra = PER_SOURCE_PER_WEEK - (state.quotaLimit ?? 40);
+    for (const src of SOURCES) if (state.quota[src.id] != null) state.quota[src.id] += extra;
+    state.tries = 0;
+    if (state.phase === 'done') state.phase = 'collect';
+  }
+  state.quotaLimit = PER_SOURCE_PER_WEEK;
   // Source ajoutée en cours de semaine : elle reçoit son quota et la récolte reprend.
   for (const src of SOURCES) {
     if (state.quota[src.id] != null) continue;
@@ -156,7 +164,7 @@ export async function runRecipes(env, now = new Date()) {
       // ou jusqu'à avoir parcouru tous ses sitemaps.
       const open = SOURCES.filter((s) => state.quota[s.id] > 0 && !state.exhausted?.[s.id]);
       const src = open[state.tries % Math.max(1, open.length)];
-      if (!src || state.tries > 120) {
+      if (!src || state.tries > 400) {
         state.phase = 'fetch';
         msg = `recettes : ${state.queue.length} à lire`;
       } else {
