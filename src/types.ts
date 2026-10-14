@@ -105,7 +105,7 @@ export type Equipment =
   | 'foodProcessor'
   | 'pressureCooker';
 
-export type Category = 'plat' | 'entree' | 'soupe' | 'salade' | 'dessert' | 'petit-dej' | 'snack';
+export type Category = 'plat' | 'entree' | 'soupe' | 'salade' | 'dessert' | 'petit-dej' | 'snack' | 'sauce';
 
 export interface Recipe {
   id: string;

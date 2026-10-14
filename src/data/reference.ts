@@ -195,4 +195,5 @@ export const CATEGORY_LABELS: Record<string, string> = {
   dessert: 'Dessert',
   'petit-dej': 'Petit-déj',
   snack: 'Snack',
+  sauce: 'Sauces',
 };

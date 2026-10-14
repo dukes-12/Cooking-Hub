@@ -185,11 +185,14 @@ function guessEmoji(title: string, cat: Category): string {
     [/tarte|quiche/, '🥧'], [/curry|dal/, '🍛'], [/burger/, '🍔'], [/crepe|pancake/, '🥞'], [/oeuf|omelette/, '🍳'],
   ];
   for (const [re, e] of table) if (re.test(t)) return e;
-  return cat === 'dessert' ? '🍰' : '🍽️';
+  return cat === 'dessert' ? '🍰' : cat === 'sauce' ? '🥣' : '🍽️';
 }
 
 function guessCategory(r: Record<string, unknown>): Category {
   const c = normalize(text(r.recipeCategory) + ' ' + text(r.name));
+  // Sauces, vinaigrettes, condiments : le titre commence par le nom de la sauce (« pâtes sauce tomate » reste un plat).
+  const title = normalize(text(r.name));
+  if (/^(sauces?|vinaigrette|mayonnaise|mayo|bechamel|pesto|aioli|chimichurri|coulis|tapenade|rouille|beurre blanc|beurre maitre|molho|maionese|tzatziki|guacamole|houmous|salsa)\b/.test(title) || /^(sauce|molho|condiment)/.test(normalize(text(r.recipeCategory)))) return 'sauce';
   if (/dessert|gateau|cake|tarte sucree|cookie|biscuit/.test(c)) return 'dessert';
   if (/soupe|veloute|soup/.test(c)) return 'soupe';
   if (/salade|salad/.test(c)) return 'salade';

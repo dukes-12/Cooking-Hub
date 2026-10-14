@@ -11,7 +11,7 @@ import { fmtMoney } from '../lib/pricing';
 import { monthlySavings } from '../lib/savings';
 import type { Category } from '../types';
 
-const FILTERS: (Category | 'all')[] = ['all', 'plat', 'dessert', 'petit-dej', 'soupe', 'salade'];
+const FILTERS: (Category | 'all')[] = ['all', 'plat', 'dessert', 'petit-dej', 'soupe', 'salade', 'sauce'];
 
 type Quick = 'fast' | 'fridge' | 'cheap' | 'nooven';
 const QUICK_FILTERS: { id: Quick; label: string; test: (m: Match, budget: number) => boolean }[] = [
@@ -33,7 +33,8 @@ export function Discover() {
       matches
         .filter((m) => m.adapted.status !== 'incompatible')
         .filter((m) => !state.passed.includes(m.adapted.recipe.id) && !state.favorites.includes(m.adapted.recipe.id))
-        .filter((m) => cat === 'all' || m.adapted.recipe.category === cat)
+        // Les sauces ne sont pas des repas : seulement quand on les demande.
+        .filter((m) => (cat === 'all' ? m.adapted.recipe.category !== 'sauce' : m.adapted.recipe.category === cat))
         .filter((m) => quick.every((q) => QUICK_FILTERS.find((f) => f.id === q)!.test(m, state.profile.budgetPerServing)))
         .filter((m) => matchesCuisines(m.adapted.recipe, state.profile.cuisines))
         .sort((a, b) => b.score - a.score),

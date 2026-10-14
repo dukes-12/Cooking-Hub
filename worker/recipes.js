@@ -118,9 +118,17 @@ export async function runRecipes(env, now = new Date()) {
   const known = new Set([...index.urls, ...(state.failed ?? [])]);
   let msg = 'recettes : rien à faire cette semaine';
 
+  // Recettes ciblées (ex. sauces) : liste d'adresses posée dans « recipes:wanted », lue en priorité.
+  const wanted = await kv.get('recipes:wanted', 'json');
+  if (Array.isArray(wanted) && wanted.length) {
+    await kv.delete('recipes:wanted');
+    const queued = new Set((state.priority ?? []).map((w) => w.url));
+    state.priority = [...(state.priority ?? []), ...wanted.filter((w) => w?.url && SOURCES.some((s) => s.id === w.src && s.page.test(w.url)) && !known.has(w.url) && !queued.has(w.url))];
+  }
+
   try {
     // Relecture des recettes déjà récoltées (version de détection plus récente) : après la récolte de la semaine.
-    if (index.count && index.equipV !== EQUIPMENT_VERSION && state.phase === 'done') {
+    if (index.count && index.equipV !== EQUIPMENT_VERSION && state.phase === 'done' && !state.priority?.length) {
       // Recettes récoltées avant la détection des appareils : on relit leur page (5 par passage).
       let todo = PAGES_PER_RUN;
       for (let n = 0; n < index.chunks && todo > 0; n++) {
@@ -143,7 +151,7 @@ export async function runRecipes(env, now = new Date()) {
         await kv.put('recipes:index', JSON.stringify(index));
       }
       msg = `recettes : appareils relus (${PAGES_PER_RUN - todo})`;
-    } else if (state.phase === 'collect') {
+    } else if (state.phase === 'collect' && !state.priority?.length) {
       // Les sources tournent : chacune lit la tranche suivante de ses sitemaps, jusqu'à son quota de la semaine
       // ou jusqu'à avoir parcouru tous ses sitemaps.
       const open = SOURCES.filter((s) => state.quota[s.id] > 0 && !state.exhausted?.[s.id]);
@@ -177,8 +185,10 @@ export async function runRecipes(env, now = new Date()) {
         }
         msg = `recettes : ${src.name}, ${fresh.length} nouvelles adresses`;
       }
-    } else if (state.phase === 'fetch') {
-      const batch = state.queue.splice(0, PAGES_PER_RUN);
+    } else if (state.priority?.length || state.phase === 'fetch') {
+      // Recettes demandées (clé « recipes:wanted ») d'abord, puis la file de la semaine.
+      const fromPriority = !!state.priority?.length;
+      const batch = fromPriority ? state.priority.splice(0, PAGES_PER_RUN) : state.queue.splice(0, PAGES_PER_RUN);
       let added = 0;
       const lastKey = `recipes:chunk:${Math.max(0, index.chunks - 1)}`;
       let chunk = index.chunks ? ((await kv.get(lastKey, 'json')) ?? []) : [];
@@ -207,8 +217,8 @@ export async function runRecipes(env, now = new Date()) {
         await kv.put(`recipes:chunk:${index.chunks - 1}`, JSON.stringify(chunk));
         await kv.put('recipes:index', JSON.stringify(index));
       }
-      if (!state.queue.length || index.count >= MAX_RECIPES) state.phase = 'done';
-      msg = `recettes : ${added} ajoutées (${index.count} au total), ${state.queue.length} restantes`;
+      if (!fromPriority && (!state.queue.length || index.count >= MAX_RECIPES)) state.phase = 'done';
+      msg = `recettes : ${added} ajoutées (${index.count} au total), ${fromPriority ? `${state.priority.length} demandées` : state.queue.length} restantes`;
     }
   } catch (e) {
     msg = `recettes : erreur ${e.message}`;
